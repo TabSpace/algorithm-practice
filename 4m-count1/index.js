@@ -47,7 +47,10 @@ var countByStr = (start, end) => {
 };
 
 // 依据排列组合规律计算，复杂但性能高
+// 有了公式，性能直接上 O(1)
 var countByArrangement = (() => {
+
+    // 求一个数据的位数
     var getDigits = number => {
       if (number <= 0) {
         return 0;
@@ -60,6 +63,7 @@ var countByArrangement = (() => {
       return digits;
     };
 
+    // 求递归
     var getFactorial = (number, limit) => {
       if (number <= 0) {
         return 0;
@@ -87,7 +91,7 @@ var countByArrangement = (() => {
 
     // 搞到了最终公式 M(n) = F(10^n - 1) = n * 10^(n-1)
     // M(2) = F(10^2 - 1) = F(99) = 2 * 10^(2-1) = 20
-    // 有这个公式，上面的 getC 都没用了
+    // 有这个公式，上面的 getC 就没用了
     // 通过 getC 也可以求值，需要考虑排列组合
     // 求F(9), F(99), F(999) ...
     // n 为 9 的数量
@@ -96,21 +100,60 @@ var countByArrangement = (() => {
     };
 
     // 如果 k > 1
-    // N(k,j) = F(k * 10^j) = 10^j + k * M(k)
+    // N(k,j) = F(k * 10^j) = 10^j + k * M(j)
     // N(2,2) = F(2 * 10^2) = F(200) = 100 + 2 * M(2) = 140
     // 如果 k === 1 直接用 fnM(j)
     var fnN = (k, j) => {
-
+      if (j < 0) {
+        throw(new Error('j 必须大于等于 0'));
+      }
+      if (k <= 0) {
+        return 0;
+      } else if (k === 1) {
+        if (j > 0) {
+          return fnM(j);
+        } else {
+          return 0;
+        }
+      } else if (k > 1 && k < 10) {
+        if (j > 0) {
+          return Math.pow(10, j) + k * fnM(j);  
+        } else {
+          return 1;
+        }
+      } else {
+        throw(new Error('k 必须小于 10'));
+      }
     };
 
+    // 求从 0 到任意正整数，1 出现的数量
+    var fnAny = number => {
+      if (number <= 0) {
+        return 0;
+      }
+      let arr = [];
+      let digitsArr = [];
+      do {
+        let digit = number % 10;
+        arr.push(digit);
+        number = Math.floor(number / 10);
+      } while (number > 0)
+      arr.reverse();
+      console.log(arr);
+    };
+
+    // 求任意正整数到另一个正整数，1的出现数量
+    // 不包含 end 本身
+    // start 必须小于等于 end
     return (start, end) => {
-      if (end > start) {
+      if (end >= start) {
         return 0;
       }
     }
 })();
 
 console.log('countByStr(0, 0)', countByStr(0, 0)); //0
+console.log('countByStr(0, 1)', countByStr(0, 1)); //0
 console.log('countByStr(0, 9)', countByStr(0, 9)); //1
 console.log('countByStr(0, 20)', countByStr(0, 20)); //12
 console.log('countByStr(0, 99)', countByStr(0, 99)); //20
