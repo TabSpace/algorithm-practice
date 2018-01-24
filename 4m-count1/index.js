@@ -18,11 +18,13 @@
 // - 则依据组合公式求得:
 // - F(999) = C(3,3)*3 + C(3,2)*9*2 + C(3,1)*9*9*1 = 1*3 + 3*9*2 + 3*9*9 = 3 + 54 + 243 = 300
 // - 类似推理导出，F(9) = 1, F(99) = 20, F(999)=300, F(9999)=4000
-// - 可发现公式：M(n) = F(10^n - 1) = n * 10^(n-1) 相关推理证明比较复杂，不在此列举
+// - 可发现公式：M(n) = F(10^n - 1) = n * 10^(n-1)
+// - 相关推理证明比较复杂，不在此列举
 // - 递归推理低位与高位状况，从1位到百万位，分别求值再整合
 // - 考虑不同位数统计叠加推理0到所有数字的情况
 // - 高位从0求值减去低位从0求值可解决任意差值情形 F(n, m) = F(n) - F(m)
 // - F(4000000) = 4 * F(10^6-1) + 10^6 = 4 * 600000 + 1000000 = 3400000
+// 算法效率优化到O(1)，OHYE
 
 // start 参与计算
 // end 不参与计算
@@ -131,27 +133,45 @@ var countByArrangement = (() => {
       if (number <= 0) {
         return 0;
       }
+
       let arr = [];
       let digitsArr = [];
+      let temp = number;
       do {
-        let digit = number % 10;
+        let digit = temp % 10;
         arr.push(digit);
-        number = Math.floor(number / 10);
-      } while (number > 0)
+        temp = Math.floor(temp / 10);
+      } while (temp > 0)
       arr.reverse();
-      console.log(arr);
+
+      let count = arr.reduce((mount, num, index) => {
+        let digit = arr.length - 1 - index;
+        mount += fnN(num, digit);
+        return mount;
+      }, 0);
+
+      if (arr[0] === 1) {
+        let digitN = Math.pow(10, (arr.length - 1));
+        let mod = number % digitN;
+        count += mod;
+      }
+
+      return count;
     };
 
     // 求任意正整数到另一个正整数，1的出现数量
     // 不包含 end 本身
     // start 必须小于等于 end
     return (start, end) => {
-      if (end >= start) {
+      if (start > end) {
         return 0;
+      } else {
+        return fnAny(end) -  fnAny(start);
       }
     }
 })();
 
+console.time('----- count-by-str');
 console.log('countByStr(0, 0)', countByStr(0, 0)); //0
 console.log('countByStr(0, 1)', countByStr(0, 1)); //0
 console.log('countByStr(0, 9)', countByStr(0, 9)); //1
@@ -163,9 +183,34 @@ console.log('countByStr(0, 999)', countByStr(0, 999)); //300
 console.log('countByStr(0, 9999)', countByStr(0, 9999)); //4000
 console.log('countByStr(0, 99999)', countByStr(0, 99999)); //50000
 console.log('countByStr(0, 999999)', countByStr(0, 999999)); //600000
+console.log('countByStr(0, 1000)', countByStr(0, 1000)); //300
+console.log('countByStr(0, 1999)', countByStr(0, 1999)); //1599
 console.log('countByStr(1000, 1999)', countByStr(1000, 1999)); //1300
-console.time('count-by-str-4m');
+console.log('countByStr(1234, 5678)', countByStr(1234, 5678)); //2050
+console.timeEnd('----- count-by-str'); 
+console.time('----- count-by-str-4m');
 console.log('countByStr(0, 4000000)', countByStr(0, 4000000)); //3400000
-console.timeEnd('count-by-str-4m'); //4363ms(node)
+console.timeEnd('----- count-by-str-4m'); //4363ms(node)
+console.log('\n');
 
+console.time('----- count-by-arrangement');
+console.log('countByArrangement(0, 0)', countByArrangement(0, 0)); //0
+console.log('countByArrangement(0, 1)', countByArrangement(0, 1)); //0
+console.log('countByArrangement(0, 9)', countByArrangement(0, 9)); //1
+console.log('countByArrangement(0, 20)', countByArrangement(0, 20)); //12
+console.log('countByArrangement(0, 99)', countByArrangement(0, 99)); //20
+console.log('countByArrangement(0, 300)', countByArrangement(0, 200)); //160
+console.log('countByArrangement(0, 300)', countByArrangement(0, 300)); //160
+console.log('countByArrangement(0, 999)', countByArrangement(0, 999)); //300
+console.log('countByArrangement(0, 9999)', countByArrangement(0, 9999)); //4000
+console.log('countByArrangement(0, 99999)', countByArrangement(0, 99999)); //50000
+console.log('countByArrangement(0, 999999)', countByArrangement(0, 999999)); //600000
+console.log('countByArrangement(0, 1000)', countByArrangement(0, 1000)); //300
+console.log('countByArrangement(0, 1999)', countByArrangement(0, 1999)); //1599
+console.log('countByArrangement(1234, 5678)', countByArrangement(1234, 5678)); //2050
+console.log('countByArrangement(1000, 1999)', countByArrangement(1000, 1999)); //1300
+console.timeEnd('----- count-by-arrangement');
+console.time('----- count-by-arrangement-4m');
+console.log('countByArrangement(0, 4000000)', countByArrangement(0, 4000000)); //3400000
+console.timeEnd('----- count-by-arrangement-4m'); //4363ms(node)
 
