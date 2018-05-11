@@ -34,7 +34,6 @@ const qsRuanyifeng = (() => {
 })();
 
 // https://gist.github.com/wintercn/c30464ed3732ee839c3eeed316d73253
-// winter 提交的第一个版本
 const qsWintercn = (arr, start, end) => {
 	let midValue = arr[start];
 	let p1 = start;
@@ -51,6 +50,34 @@ const qsWintercn = (arr, start, end) => {
 	if (p1 < end)
 		qsWintercn(arr, p1, end);
 };
+
+// https://gist.github.com/wintercn/c30464ed3732ee839c3eeed316d73253#file-quicksortfp-js
+const qsWintercnFp = (() => {
+	const y = g =>
+		(f => f(f))(
+			self =>
+			g((...args) => self(self).apply(this, args))
+		)
+
+	return y(qsWintercnFp =>
+		(array, compare) =>
+		array.length <= 1 ?
+		array :
+		qsWintercnFp(
+			array.slice(1).filter(
+				e => compare(e, array[0]) <= 0),
+				compare
+			)
+			.concat([array[0]])
+			.concat(
+				qsWintercnFp(
+					array.slice(1).filter(
+						e => compare(e, array[0]) > 0),
+						compare
+					)
+				)
+		)
+})();
 
 // https://gist.github.com/ideawu/a114679bb8f0a94452d462ae14b7c977
 const qsHoare = (() => {
@@ -137,21 +164,27 @@ const qsLomuto = (() => {
 	{
 		let arr = sample.slice(0);
 		qsWintercn(arr, 0, arr.length - 1);
-		rs = arr;
+		let rs = arr;
 		console.log('-', rs, 'wintercn');
 	}
 
 	{
 		let arr = sample.slice(0);
+		let rs = qsWintercnFp(arr, utils.compare);
+		console.log('-', rs, 'wintercn-fp');
+	}
+
+	{
+		let arr = sample.slice(0);
 		qsHoare(arr, 0, arr.length - 1);
-		rs = arr;
+		let rs = arr;
 		console.log('-', rs, 'hoare');
 	}
 
 	{
 		let arr = sample.slice(0);
 		qsLomuto(arr, 0, arr.length - 1);
-		rs = arr;
+		let rs = arr;
 		console.log('-', rs, 'lomute');
 	}
 }
@@ -212,6 +245,10 @@ const runTest = (fn, name) => {
 		qsWintercn(arr, 0, arr.length - 1);
 		return arr;
 	}, 'wintercn');
+
+	runTest(arr => {
+		return qsWintercnFp(arr, utils.compare);
+	}, 'wintercn-fp');
 
 	runTest(arr => {
 		qsHoare(arr, 0, arr.length - 1);
