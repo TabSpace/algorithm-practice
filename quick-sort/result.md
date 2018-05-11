@@ -2,11 +2,12 @@
 
 - Origin arr length: 1000000
 - Origin arr max: 999999
-- generate origin data: 691.872ms
+- generate origin data: 855.200ms
 
-- proto: 329.671ms
-- ruanyifeng: 738.333ms
-- wintercn: 215.294ms
-- hoare: 164.241ms
-- lomute: 163.615ms
+## Result:
 
+- proto: 342.903ms
+- ruanyifeng: 711.361ms
+- wintercn: 187.975ms
+- hoare: 164.321ms
+- lomute: 169.528ms

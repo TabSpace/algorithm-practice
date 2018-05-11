@@ -197,6 +197,8 @@ const runTest = (fn, name) => {
 
 {
 	console.log('');
+	console.log('## Result:');
+	console.log('');
 
 	runTest(arr => {
 		return arr.sort(utils.compare);
