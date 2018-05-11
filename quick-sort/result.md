@@ -4,7 +4,7 @@
 - Origin arr max: 999999
 - generate origin data: 855.200ms
 
-## Result:
+## Result
 
 - proto: 342.903ms
 - ruanyifeng: 711.361ms
