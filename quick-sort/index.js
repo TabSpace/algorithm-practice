@@ -197,7 +197,7 @@ const runTest = (fn, name) => {
 
 {
 	console.log('');
-	console.log('## Result:');
+	console.log('## Result');
 	console.log('');
 
 	runTest(arr => {
