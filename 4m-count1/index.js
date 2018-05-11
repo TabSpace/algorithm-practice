@@ -31,144 +31,144 @@
 
 // 通过拼接字符串累计，可靠但缓慢
 var countByStr = (start, end) => {
-    if (start > end) {
-      return 0;
-    }
-    let i = start;
-    let str = '';
-    for (i = start; i < end; i++) {
-      str += i;
-    }
-    let mount = 0;
-    for (i = 0; i < str.length; i++) {
-      if(str.charAt(i) === '1'){
-        mount++;
-      }
-    }
-    return mount;
+	if (start > end) {
+		return 0;
+	}
+	let i = start;
+	let str = '';
+	for (i = start; i < end; i++) {
+		str += i;
+	}
+	let mount = 0;
+	for (i = 0; i < str.length; i++) {
+		if (str.charAt(i) === '1') {
+			mount++;
+		}
+	}
+	return mount;
 };
 
 // 依据排列组合规律计算，复杂但性能高
 // 有了公式，性能直接上 O(1)
 var countByArrangement = (() => {
 
-    // 求一个数据的位数
-    var getDigits = number => {
-      if (number <= 0) {
-        return 0;
-      }
-      let digits = 0;
-      do {
-        number = Math.floor(number / 10);
-        digits++;
-      } while ( number > 0 )
-      return digits;
-    };
+	// 求一个数据的位数
+	var getDigits = number => {
+		if (number <= 0) {
+			return 0;
+		}
+		let digits = 0;
+		do {
+			number = Math.floor(number / 10);
+			digits++;
+		} while (number > 0)
+		return digits;
+	};
 
-    // 求递归
-    var getFactorial = (number, limit) => {
-      if (number <= 0) {
-        return 0;
-      }
-      let rs = 1;
-      limit = limit || number;
-      do {
-        rs = rs * number;
-        number = number - 1;
-        limit --;
-      } while(number > 0 && limit > 0)
-      return rs;
-    };
+	// 求递归
+	var getFactorial = (number, limit) => {
+		if (number <= 0) {
+			return 0;
+		}
+		let rs = 1;
+		limit = limit || number;
+		do {
+			rs = rs * number;
+			number = number - 1;
+			limit--;
+		} while (number > 0 && limit > 0)
+		return rs;
+	};
 
-    // C(4, 2) === (4*3)/(2*1) === 6
-    // C(5, 3) === (5*4*3)/(3*2*1) === 10
-    var getC = (n, m) => {
-      if (n < m) {
-        return 0;
-      }
-      let fTop = getFactorial(n, m);
-      let fBottom = getFactorial(m);
-      return Math.floor(fTop / fBottom);
-    };
+	// C(4, 2) === (4*3)/(2*1) === 6
+	// C(5, 3) === (5*4*3)/(3*2*1) === 10
+	var getC = (n, m) => {
+		if (n < m) {
+			return 0;
+		}
+		let fTop = getFactorial(n, m);
+		let fBottom = getFactorial(m);
+		return Math.floor(fTop / fBottom);
+	};
 
-    // 搞到了最终公式 M(n) = F(10^n - 1) = n * 10^(n-1)
-    // M(2) = F(10^2 - 1) = F(99) = 2 * 10^(2-1) = 20
-    // 有这个公式，上面的 getC 就没用了
-    // 通过 getC 也可以求值，需要考虑排列组合
-    // 求F(9), F(99), F(999) ...
-    // n 为 9 的数量
-    var fnM = n => {
-      return n * Math.pow(10, n - 1)
-    };
+	// 搞到了最终公式 M(n) = F(10^n - 1) = n * 10^(n-1)
+	// M(2) = F(10^2 - 1) = F(99) = 2 * 10^(2-1) = 20
+	// 有这个公式，上面的 getC 就没用了
+	// 通过 getC 也可以求值，需要考虑排列组合
+	// 求F(9), F(99), F(999) ...
+	// n 为 9 的数量
+	var fnM = n => {
+		return n * Math.pow(10, n - 1)
+	};
 
-    // 如果 k > 1
-    // N(k,j) = F(k * 10^j) = 10^j + k * M(j)
-    // N(2,2) = F(2 * 10^2) = F(200) = 100 + 2 * M(2) = 140
-    // 如果 k === 1 直接用 fnM(j)
-    var fnN = (k, j) => {
-      if (j < 0) {
-        throw(new Error('j 必须大于等于 0'));
-      }
-      if (k <= 0) {
-        return 0;
-      } else if (k === 1) {
-        if (j > 0) {
-          return fnM(j);
-        } else {
-          return 0;
-        }
-      } else if (k > 1 && k < 10) {
-        if (j > 0) {
-          return Math.pow(10, j) + k * fnM(j);  
-        } else {
-          return 1;
-        }
-      } else {
-        throw(new Error('k 必须小于 10'));
-      }
-    };
+	// 如果 k > 1
+	// N(k,j) = F(k * 10^j) = 10^j + k * M(j)
+	// N(2,2) = F(2 * 10^2) = F(200) = 100 + 2 * M(2) = 140
+	// 如果 k === 1 直接用 fnM(j)
+	var fnN = (k, j) => {
+		if (j < 0) {
+			throw (new Error('j 必须大于等于 0'));
+		}
+		if (k <= 0) {
+			return 0;
+		} else if (k === 1) {
+			if (j > 0) {
+				return fnM(j);
+			} else {
+				return 0;
+			}
+		} else if (k > 1 && k < 10) {
+			if (j > 0) {
+				return Math.pow(10, j) + k * fnM(j);
+			} else {
+				return 1;
+			}
+		} else {
+			throw (new Error('k 必须小于 10'));
+		}
+	};
 
-    // 求从 0 到任意正整数，1 出现的数量
-    var fnAny = number => {
-      if (number <= 0) {
-        return 0;
-      }
+	// 求从 0 到任意正整数，1 出现的数量
+	var fnAny = number => {
+		if (number <= 0) {
+			return 0;
+		}
 
-      let arr = [];
-      let digitsArr = [];
-      let temp = number;
-      do {
-        let digit = temp % 10;
-        arr.push(digit);
-        temp = Math.floor(temp / 10);
-      } while (temp > 0)
-      arr.reverse();
+		let arr = [];
+		let digitsArr = [];
+		let temp = number;
+		do {
+			let digit = temp % 10;
+			arr.push(digit);
+			temp = Math.floor(temp / 10);
+		} while (temp > 0)
+		arr.reverse();
 
-      let count = arr.reduce((mount, num, index) => {
-        let digit = arr.length - 1 - index;
-        mount += fnN(num, digit);
-        return mount;
-      }, 0);
+		let count = arr.reduce((mount, num, index) => {
+			let digit = arr.length - 1 - index;
+			mount += fnN(num, digit);
+			return mount;
+		}, 0);
 
-      if (arr[0] === 1) {
-        let digitN = Math.pow(10, (arr.length - 1));
-        let mod = number % digitN;
-        count += mod;
-      }
+		if (arr[0] === 1) {
+			let digitN = Math.pow(10, (arr.length - 1));
+			let mod = number % digitN;
+			count += mod;
+		}
 
-      return count;
-    };
+		return count;
+	};
 
-    // 求任意正整数到另一个正整数，1的出现数量
-    // 不包含 end 本身
-    // start 必须小于等于 end
-    return (start, end) => {
-      if (start > end) {
-        return 0;
-      } else {
-        return fnAny(end) -  fnAny(start);
-      }
-    }
+	// 求任意正整数到另一个正整数，1的出现数量
+	// 不包含 end 本身
+	// start 必须小于等于 end
+	return (start, end) => {
+		if (start > end) {
+			return 0;
+		} else {
+			return fnAny(end) - fnAny(start);
+		}
+	}
 })();
 
 console.time('----- count-by-str');
@@ -187,7 +187,7 @@ console.log('countByStr(0, 1000)', countByStr(0, 1000)); //300
 console.log('countByStr(0, 1999)', countByStr(0, 1999)); //1599
 console.log('countByStr(1000, 1999)', countByStr(1000, 1999)); //1300
 console.log('countByStr(1234, 5678)', countByStr(1234, 5678)); //2050
-console.timeEnd('----- count-by-str'); 
+console.timeEnd('----- count-by-str');
 console.time('----- count-by-str-4m');
 console.log('countByStr(0, 4000000)', countByStr(0, 4000000)); //3400000
 console.timeEnd('----- count-by-str-4m'); //4363ms(node)
