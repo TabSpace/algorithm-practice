@@ -1,14 +1,16 @@
 # quick sort test
 
 - Origin arr length: 1000000
-- Origin arr max: 999999
-- generate origin data: 666.718ms
+- Origin arr max: 999998
+- generate origin data: 613.161ms
 
 ## Result
 
-- proto: 319.771ms
-- ruanyifeng: 713.716ms
-- wintercn: 176.449ms
-- wintercn-fp: 2495.225ms
-- hoare: 155.196ms
-- lomute: 167.589ms
+- proto: 312.203ms
+- ruanyifeng: 668.628ms
+- ruanyifeng-chg: 560.678ms
+- wintercn: 179.199ms
+- wintercn-chg: 244.808ms
+- wintercn-fp: 2574.135ms
+- hoare: 159.381ms
+- lomute: 164.716ms

@@ -6,32 +6,61 @@ const utils = {
 		let tmp = arr[s];
 		arr[s] = arr[e];
 		arr[e] = tmp;
+	},
+	swapPlus(arr, s, e) {
+		arr[s] = arr[s] + arr[e];
+		arr[e] = arr[s] - arr[e];
+		arr[s] = arr[s] - arr[e];
 	}
 };
 
 // http://www.ruanyifeng.com/blog/2011/04/quicksort_in_javascript.html
-const qsRuanyifeng = (() => {
-	return arr => {
-		if (arr.length <= 1) {
-			return arr;
+const qsRuanyifeng = arr => {
+	if (arr.length <= 1) {
+		return arr;
+	}
+	let pivotIndex = Math.floor(arr.length / 2);
+	let pivot = arr.splice(pivotIndex, 1)[0];
+	let left = [];
+	let right = [];
+	for (let i = 0; i < arr.length; i++) {
+		if (arr[i] < pivot) {
+			left.push(arr[i]);
+		} else {
+			right.push(arr[i]);
 		}
-		let pivotIndex = Math.floor(arr.length / 2);
-		let pivot = arr.splice(pivotIndex, 1)[0];
-		let left = [];
-		let right = [];
-		for (let i = 0; i < arr.length; i++) {
-			if (arr[i] < pivot) {
-				left.push(arr[i]);
-			} else {
-				right.push(arr[i]);
-			}
+	}
+	return qsRuanyifeng(left).concat(
+		[pivot],
+		qsRuanyifeng(right)
+	);
+};
+
+// modified by tabspace at 20180514 11:44
+// remove the splice
+const qsRuanyifengChg = arr => {
+	if (arr.length <= 1) {
+		return arr;
+	}
+	let pivotIndex = Math.floor(arr.length / 2);
+	let pivot = arr[pivotIndex];
+	let left = [];
+	let right = [];
+	for (let i = 0; i < arr.length; i++) {
+		if (i === pivotIndex) {
+			continue;
 		}
-		return qsRuanyifeng(left).concat(
-			[pivot],
-			qsRuanyifeng(right)
-		);
-	};
-})();
+		if (arr[i] < pivot) {
+			left.push(arr[i]);
+		} else {
+			right.push(arr[i]);
+		}
+	}
+	return qsRuanyifengChg(left).concat(
+		[pivot],
+		qsRuanyifengChg(right)
+	);
+};
 
 // https://gist.github.com/wintercn/c30464ed3732ee839c3eeed316d73253
 const qsWintercn = (arr, start, end) => {
@@ -49,6 +78,25 @@ const qsWintercn = (arr, start, end) => {
 		qsWintercn(arr, start, p1 - 1);
 	if (p1 < end)
 		qsWintercn(arr, p1, end);
+};
+
+// modified by tabspace at 20180514 11:57
+// swap -> swapPlus
+const qsWintercnChg = (arr, start, end) => {
+	let midValue = arr[start];
+	let p1 = start;
+	let p2 = end;
+	while (p1 < p2) {
+		utils.swapPlus(arr, p1, p1 + 1);
+		while (utils.compare(arr[p1], midValue) >= 0 && p1 < p2) {
+			utils.swapPlus(arr, p1, p2--);
+		}
+		p1++;
+	}
+	if (start < p1 - 1)
+		qsWintercnChg(arr, start, p1 - 1);
+	if (p1 < end)
+		qsWintercnChg(arr, p1, end);
 };
 
 // https://gist.github.com/wintercn/c30464ed3732ee839c3eeed316d73253#file-quicksortfp-js
@@ -148,7 +196,7 @@ const qsLomuto = (() => {
 	console.log('');
 	console.log('## sample test');
 	const sample = [3, 1, 4, 1, 5, 9, 2, 6];
-	
+
 	{
 		let arr = sample.slice(0);
 		let rs = arr.sort(utils.compare);
@@ -163,9 +211,22 @@ const qsLomuto = (() => {
 
 	{
 		let arr = sample.slice(0);
+		let rs = qsRuanyifengChg(arr);
+		console.log('-', rs, 'ruanyifeng-chg');
+	}
+
+	{
+		let arr = sample.slice(0);
 		qsWintercn(arr, 0, arr.length - 1);
 		let rs = arr;
 		console.log('-', rs, 'wintercn');
+	}
+
+	{
+		let arr = sample.slice(0);
+		qsWintercnChg(arr, 0, arr.length - 1);
+		let rs = arr;
+		console.log('-', rs, 'wintercn-chg');
 	}
 
 	{
@@ -242,9 +303,18 @@ const runTest = (fn, name) => {
 	}, 'ruanyifeng');
 
 	runTest(arr => {
+		return qsRuanyifengChg(arr);
+	}, 'ruanyifeng-chg');
+
+	runTest(arr => {
 		qsWintercn(arr, 0, arr.length - 1);
 		return arr;
 	}, 'wintercn');
+
+	runTest(arr => {
+		qsWintercnChg(arr, 0, arr.length - 1);
+		return arr;
+	}, 'wintercn-chg');
 
 	runTest(arr => {
 		return qsWintercnFp(arr, utils.compare);
