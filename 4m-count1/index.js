@@ -2,8 +2,8 @@
 
 // 问题
 // - 统计 0 ～ 4000000 所有的数字中(不包含末尾数)，出现过多少个数字1。
-// - 例如单独数字 11 为 2 个 1 
-// 
+// - 例如单独数字 11 为 2 个 1
+//
 // - 查找排列组合规律
 // - 举例求 1000 - 1999 之间 1 的数量，设总数为M，初始值M=0
 // - 后面3位数字排列为 U(10, 3) （10x10x10=1000）首位数字为1，至少包含了所有排列状况中1的数量 M+=1000
@@ -25,9 +25,57 @@
 // - 高位从0求值减去低位从0求值可解决任意差值情形 F(n, m) = F(n) - F(m)
 // - F(4000000) = 4 * F(10^6-1) + 10^6 = 4 * 600000 + 1000000 = 3400000
 // 算法效率优化到O(1)，OHYE
+//
+// 20180816 原理解析
+// 对于从 0 到 99 这样的数据，假设把 0 写为 00, 1 写为 01 依次类推，9 写为 09
+// 则一共100个数据，包含了 2 位数 0 和 9 的全部排列组合，2 位数单独数字总量为 2 * 100,。
+// 单独的某个非 0 数字，如 1 或者 2 在每一位上出现概率都是 1 / 10
+// 由于是全部的排列组合，可以直接乘以概率得到单独非 0 数字的出现次数 20。
+// 其它位数以此类推
 
 // start 参与计算
 // end 不参与计算
+
+var utils = {};
+
+// 求一个数据的位数
+utils.getDigits = number => {
+	if (number <= 0) {
+		return 0;
+	}
+	let digits = 0;
+	do {
+		number = Math.floor(number / 10);
+		digits++;
+	} while (number > 0)
+	return digits;
+};
+
+// C(4, 2) === (4*3)/(2*1) === 6
+// C(5, 3) === (5*4*3)/(3*2*1) === 10
+utils.getC = (n, m) => {
+	if (n < m) {
+		return 0;
+	}
+	let fTop = getFactorial(n, m);
+	let fBottom = getFactorial(m);
+	return Math.floor(fTop / fBottom);
+};
+
+// 求阶乘
+utils.getFactorial = (number, limit) => {
+	if (number <= 0) {
+		return 0;
+	}
+	let rs = 1;
+	limit = limit || number;
+	do {
+		rs = rs * number;
+		number = number - 1;
+		limit--;
+	} while (number > 0 && limit > 0)
+	return rs;
+};
 
 // 通过拼接字符串累计，可靠但缓慢
 var countByStr = (start, end) => {
@@ -51,45 +99,6 @@ var countByStr = (start, end) => {
 // 依据排列组合规律计算，复杂但性能高
 // 有了公式，性能直接上 O(1)
 var countByArrangement = (() => {
-
-	// 求一个数据的位数
-	var getDigits = number => {
-		if (number <= 0) {
-			return 0;
-		}
-		let digits = 0;
-		do {
-			number = Math.floor(number / 10);
-			digits++;
-		} while (number > 0)
-		return digits;
-	};
-
-	// 求递归
-	var getFactorial = (number, limit) => {
-		if (number <= 0) {
-			return 0;
-		}
-		let rs = 1;
-		limit = limit || number;
-		do {
-			rs = rs * number;
-			number = number - 1;
-			limit--;
-		} while (number > 0 && limit > 0)
-		return rs;
-	};
-
-	// C(4, 2) === (4*3)/(2*1) === 6
-	// C(5, 3) === (5*4*3)/(3*2*1) === 10
-	var getC = (n, m) => {
-		if (n < m) {
-			return 0;
-		}
-		let fTop = getFactorial(n, m);
-		let fBottom = getFactorial(m);
-		return Math.floor(fTop / fBottom);
-	};
 
 	// 搞到了最终公式 M(n) = F(10^n - 1) = n * 10^(n-1)
 	// M(2) = F(10^2 - 1) = F(99) = 2 * 10^(2-1) = 20
