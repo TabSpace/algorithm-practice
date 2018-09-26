@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=0">
 <meta http-equiv="X-UA-Compatible" content="ie=edge">
-<title>Mesh-test</title>
+<title>mesh-canvas</title>
 <style>
 body{
 	margin: 0;
@@ -35,10 +35,10 @@ body{
 </head>
 <body>
 <ol class="intro">
-	<li>提供一个中心为原点的坐标系，用于计算新坐标在原坐标系的位置</li>
-	<li>阅读参考发现可以直接配置原点</li>
-	<li>点就是圆，提供一个画圆的方法</li>
-	<li>提供坐标连线的方法</li>
+	<li>给点函数添加三维坐标</li>
+	<li>构建基本立方体三维坐标点</li>
+	<li>通过透视公式排布点的位置</li>
+	<li>实现近大远小的透视效果</li>
 </ol>
 <div class="demo">
 	<canvas id="canvas" width="480" height="270"></canvas>
@@ -60,6 +60,7 @@ body{
 		let conf = {
 			x: 0,
 			y: 0,
+			z: 0,
 			size: 0,
 			color: '#000',
 			...options
@@ -78,14 +79,18 @@ body{
 		let conf = {
 			startX: 0,
 			startY: 0,
+			startZ: 0,
 			endX: 0,
 			endY: 0,
+			endZ: 0,
+			size: 1,
 			color: '#000',
 			...options
 		};
 		ctx.save();
 		ctx.beginPath();
 		ctx.strokeStyle = conf.color;
+		ctx.lineWidth = conf.size;
 		ctx.moveTo(conf.startX, conf.startY);
 		ctx.lineTo(conf.endX, conf.endY);
 		ctx.stroke();
