@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=0">
+<meta http-equiv="X-UA-Compatible" content="ie=edge">
+<title>Mesh-test</title>
+<style>
+body{
+	margin: 0;
+	padding: 0;
+	background-color: #333;
+}
+.demo{
+	position: relative;
+	margin: 10px auto;
+	width: 480px;
+	height: 270px;
+	border: 1px solid #fff;
+}
+.demo canvas {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+}
+.intro{
+	margin: 20px 0;
+	color: #fff;
+	text-align: center;
+}
+</style>
+</head>
+<body>
+<p class="intro">现在试试绘制点和线</p>
+<div class="demo">
+	<canvas id="canvas" width="480" height="270"></canvas>
+</div>
+<script>
+var canvas = document.getElementById('canvas');
+var ctx = canvas.getContext('2d');
+
+ctx.fillStyle = '#ff9100';
+ctx.strokeStyle = '#ff9100';
+ctx.arc(100, 100, 10, 0, 2 * Math.PI);
+ctx.arc(200, 100, 10, 0, 2 * Math.PI);
+ctx.fill();
+
+ctx.beginPath();
+ctx.moveTo(100, 100);
+ctx.lineTo(200, 100);
+ctx.stroke();
+
+</script>
+</body>
+</html>
