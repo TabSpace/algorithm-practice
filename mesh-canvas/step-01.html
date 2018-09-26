@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=0">
+<meta http-equiv="X-UA-Compatible" content="ie=edge">
+<title>Mesh-step-01</title>
+<style>
+body{
+	margin: 0;
+	padding: 0;
+	background-color: #333;
+}
+.demo{
+	position: relative;
+	margin: 10px auto;
+	width: 480px;
+	height: 270px;
+	border: 1px solid #fff;
+}
+.demo canvas {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+}
+.intro{
+	margin: 20px 0;
+	color: #fff;
+	text-align: center;
+}
+</style>
+</head>
+<body>
+<p class="intro">先展现下 canvas, 确认下基本概念</p>
+<div class="demo">
+	<canvas id="canvas" width="480" height="270"></canvas>
+</div>
+<script>
+var canvas = document.getElementById('canvas');
+var ctx = canvas.getContext('2d');
+
+ctx.fillStyle = 'green';
+ctx.fillRect(10, 10, 100, 100);
+
+console.log(canvas.width);
+console.log(canvas.height);
+</script>
+</body>
+</html>
