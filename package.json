@@ -1,0 +1,23 @@
+{
+  "name": "algorithm-practice",
+  "private": true,
+  "version": "0.0.0",
+  "description": "个人收集算法问题并练习-仅用来做思考练习",
+  "main": "index.js",
+  "scripts": {
+	  "server": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TabSpace/algorithm-practice.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/TabSpace/algorithm-practice/issues"
+  },
+  "homepage": "https://github.com/TabSpace/algorithm-practice#readme",
+  "devDependencies": {
+    "browser-sync": "2.24.7"
+  }
+}
