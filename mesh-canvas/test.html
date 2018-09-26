@@ -69,7 +69,8 @@ body{
 		// 坑：每次绘制一个新的图形，都要调用一次 beginPath
 		ctx.beginPath();
 		ctx.fillStyle = conf.color;
-		ctx.arc(conf.x, conf.y, conf.size, 0, 2 * Math.PI);
+		let size = conf.size / 2;
+		ctx.arc(conf.x, conf.y, size, 0, 2 * Math.PI);
 		ctx.fill();
 		ctx.restore();
 	}
@@ -97,36 +98,31 @@ body{
 		ctx.restore();
 	}
 
-	drawLine({
-		startX: -100,
-		startY: 0,
-		endX: 100,
-		endY: 0,
-		color: '#f00'
-	});
+	// 参照 css3 标准，z 轴正直朝向近处
+	// 立方体一共 8 个点
+	const cubeVertexes = [
+		[-50, -50, -50],
+		[50, -50, -50],
+		[50, 50, -50],
+		[-50, 50, -50],
+		[-50, -50, 50],
+		[50, -50, 50],
+		[50, 50, 50],
+		[-50, 50, 50]
+	];
 
-	drawLine({
-		startX: -100,
-		startY: 50,
-		endX: 100,
-		endY: 50,
-		color: '#f00'
+	cubeVertexes.forEach(item => {
+		let x = item[0];
+		let y = item[1];
+		let z = item[2];
+		drawPoint({
+			x,
+			y,
+			z,
+			size: 10,
+			color: '#ff9100'
+		});
 	});
-
-	drawPoint({
-		x: -100,
-		y: 0,
-		size: 10,
-		color: '#fff'
-	});
-
-	drawPoint({
-		x: 100,
-		y: 0,
-		size: 10,
-		color: '#ff9100'
-	});
-
 }
 </script>
 </body>
