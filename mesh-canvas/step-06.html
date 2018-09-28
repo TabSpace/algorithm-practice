@@ -43,6 +43,7 @@ a:visited{
 <ol class="intro">
 	<li>找到3纬旋转公式</li>
 	<li>旋转立方体8个顶点</li>
+	<li>实现顶点近大远小</li>
 </ol>
 <div class="demo">
 	<canvas id="canvas" width="480" height="270"></canvas>
@@ -125,19 +126,10 @@ a:visited{
 		// 坑：每次绘制一个新的图形，都要调用一次 beginPath
 		ctx.beginPath();
 		ctx.fillStyle = conf.color;
-		let size = conf.size / 2;
-		// 用投影公式改造画点的方式
-		let pos = {
-			x: conf.x,
-			y: conf.y,
-			z: conf.z
-		};
-		// 注意这里顺序很重要
-		// 想想为什么要先旋转，再投影
-		// 调整参数，了解2个角度参数都是向哪个角度旋转
-		rotate(pos, CENTER, Math.PI / 8, Math.PI / 4);
-		pos = project(pos);
-		ctx.arc(pos.x, pos.y, size, 0, 2 * Math.PI);
+		let pos = project(conf);
+		// radius 所受的影响与坐标其实一致
+		let radius = (pos.ratio * conf.size) / 2;
+		ctx.arc(pos.x, pos.y, radius, 0, 2 * Math.PI);
 		ctx.fill();
 		ctx.restore();
 	}
@@ -198,13 +190,18 @@ a:visited{
 		if (z < 0) {
 			color = '#fff'
 		}
-		drawPoint({
+		let pos = {
 			x,
 			y,
 			z,
 			size: 10,
 			color
-		});
+		};
+		// 注意这里顺序很重要
+		// 想想为什么要先旋转，再投影
+		// 调整参数，了解2个角度参数都是向哪个角度旋转
+		rotate(pos, CENTER, Math.PI / 8, Math.PI / 4);
+		drawPoint(pos);
 	});
 }
 </script>
