@@ -480,10 +480,11 @@
 						color: color
 					});
 				});
-
 			}
 
+			console.time('render');
 			render();
+			console.timeEnd('render');
 		}
 
 	</script>
