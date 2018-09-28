@@ -49,8 +49,11 @@
 
 <body>
 	<ol class="intro">
-		<li>接下来解决顶点与线段渲染顺序问题</li>
-		<li>线段色值与粗细也希望能有所变化</li>
+		<li>接下来要做顶点连线</li>
+		<li>通过图的遍历，取得连线数组与距离值</li>
+		<li>距离最短的点，必定连线</li>
+		<li>设定一个参数，比最短的线距离差在参数内的点，都可以连线</li>
+		<li>根据此概念获得网格对象</li>
 	</ol>
 	<div class="demo">
 		<canvas id="canvas" width="480" height="270"></canvas>
