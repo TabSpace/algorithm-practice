@@ -42,11 +42,8 @@ a:visited{
 <body>
 <ol class="intro">
 	<li>关键步骤</li>
-	<li>通过透视公式排布点的位置</li>
-	<li>实现近大远小的透视效果</li>
-	<li>关键字搜索：“js 3d投影公式”</li>
-	<li>找到一篇文章来辅助实现：</li>
-	<li><a href="http://blog.qiji.tech/archives/7223" target="_blank">如何使用JavaScript构建3D引擎</a></li>
+	<li>给点函数添加三维坐标</li>
+	<li>构建基本立方体三维坐标点</li>
 </ol>
 <div class="demo">
 	<canvas id="canvas" width="480" height="270"></canvas>
@@ -56,7 +53,7 @@ a:visited{
 	const canvas = document.getElementById('canvas');
 	const ctx = canvas.getContext('2d');
 
-	const PERSPECTIVE_DISTANCE = 200;
+	const PERSPECTIVE_DISTANCE = 100;
 
 	// 原点移动到中心
 	ctx.translate(
@@ -71,24 +68,6 @@ a:visited{
 				obj[key] = parseFloat(obj[key]);
 			});
 		}
-	}
-
-	// 我们抄来这个投影公式
-	// 但需要实际理解投影原理，然后再变更它
-	function project(conf) {
-		let pos = {};
-		// Distance between the camera and the plane
-		// 这里需要画图解释为什么使用负值
-		let distance = 0 - PERSPECTIVE_DISTANCE;
-		let ratio = distance / (distance + conf.z);
-
-		// 改造成我们所需的效果
-		pos.ratio = ratio;
-		pos.x = ratio * conf.x;
-		pos.y = ratio * conf.y;
-		pos.z = conf.z;
-
-		return pos;
 	}
 
 	function drawPoint(options) {
@@ -107,10 +86,7 @@ a:visited{
 		ctx.beginPath();
 		ctx.fillStyle = conf.color;
 		let size = conf.size / 2;
-		// 用投影公式改造画点的方式
-		let pos = project(conf);
-		console.log(pos);
-		ctx.arc(pos.x, pos.y, size, 0, 2 * Math.PI);
+		ctx.arc(conf.x, conf.y, size, 0, 2 * Math.PI);
 		ctx.fill();
 		ctx.restore();
 	}
