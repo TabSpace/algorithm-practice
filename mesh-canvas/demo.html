@@ -49,10 +49,9 @@
 
 <body>
 	<ol class="intro">
-		<li>接下来解决顶点与线段渲染顺序问题</li>
-		<li>如果点和线的颜色不同，就需要决定渲染顺序</li>
-		<li>需要按从后到前方式渲染网格</li>
-		<li>简单方案是从z最小的点开始，进行广度优先的图遍历</li>
+		<li>现在解决流星绘制问题</li>
+		<li>定义一个流星结构，它存储了以下几个信息</li>
+		<li>起始点，目标点，路径百分比</li>
 	</ol>
 	<div class="demo">
 		<canvas id="canvas" width="480" height="270"></canvas>
@@ -88,7 +87,6 @@
 				return Math.min(Math.max(num, min), max);
 			}
 
-
 			/**
 			 * 扩展并覆盖对象
 			 * @module
@@ -122,7 +120,6 @@
 			 * @example
 			 * console.info(contains([1,2,3,4,5],3));	//true
 			 */
-
 			function contains(arr, item) {
 				var index = arr.indexOf(item);
 				return index >= 0;
@@ -138,7 +135,6 @@
 			 * console.info(include([1,2,3],4));	//[1,2,3,4]
 			 * console.info(include([1,2,3],3));	//[1,2,3]
 			 */
-
 			function include(arr, item) {
 				if (!contains(arr, item)) {
 					arr.push(item);
@@ -156,12 +152,21 @@
 			}
 
 			// 获取线段中点
-			function getMiddle(p1, p2) {
+			function getMiddlePoint(p1, p2) {
 				return {
 					x: (p1.x + p2.x) / 2,
 					y: (p1.y + p2.y) / 2,
 					z: (p1.z + p2.z) / 2
 				};
+			}
+
+			// 获取线段上的某一点
+			function getLinePoint(p1, p2, percent) {
+				var pm = {};
+				pm.x = (p2.x - p1.x) * (percent / 100) + p1.x;
+				pm.y = (p2.y - p1.y) * (percent / 100) + p1.y;
+				pm.z = (p2.z - p1.z) * (percent / 100) + p1.z;
+				return pm;
 			}
 
 			// 我们抄来这个投影公式
@@ -288,13 +293,25 @@
 				].join(',');
 			}
 
+			// 求得投影颜色
+			// 投影是线性变换，颜色变换转成 hsl 表示方式，也很容易实现
+			// hsl 中的 l 指的是亮度，我们要改变的就是它
+			function projectColor(color, ratio) {
+				color = assign({}, color);
+				var hsl = rgbToHsl(color.r, color.g, color.b);
+				// 用比例值开平方舒缓一下色值明暗变化的剧烈程度
+				hsl[2] = Math.sqrt(ratio) * hsl[2];
+				var rgb = hslToRgb.apply(null, hsl);
+				color.r = rgb[0];
+				color.g = rgb[1];
+				color.b = rgb[2];
+				return color;
+			}
+
 			// 画点
-			function drawPoint(options) {
-				if (!options) return;
+			function drawPoint(point, options) {
+				if (!point) return;
 				var conf = assign({
-					x: 0,
-					y: 0,
-					z: 0,
 					size: 0,
 					color: {
 						r: 0,
@@ -303,27 +320,17 @@
 						a: 1
 					}
 				}, options);
-				formatFloat(conf, ['x', 'y', 'z', 'size']);
-				ctx.save();
+				formatFloat(point, ['x', 'y', 'z']);
+				formatFloat(conf, ['size']);
 
-				var pos = project(conf);
-
-				// 投影是线性变换，颜色变换转成 hsl 表示方式，也很容易实现
-				// hsl 中的 l 指的是亮度，我们要改变的就是它
-				var color = conf.color;
-				var hsl = rgbToHsl(color.r, color.g, color.b);
-				// 用比例值开平方舒缓一下色值明暗变化的剧烈程度
-				hsl[2] = Math.sqrt(pos.ratio) * hsl[2];
-				var rgb = hslToRgb.apply(null, hsl);
-				color.r = rgb[0];
-				color.g = rgb[1];
-				color.b = rgb[2];
-				ctx.fillStyle = rgbaToStr(color);
-
+				var pos = project(point);
+				var color = projectColor(conf.color, pos.ratio);
 				// radius 所受的影响与坐标其实一致
 				var radius = (pos.ratio * conf.size) / 2;
 
 				// 坑：每次绘制一个新的图形，都要调用一次 beginPath
+				ctx.save();
+				ctx.fillStyle = rgbaToStr(color);
 				ctx.beginPath();
 				ctx.arc(pos.x, pos.y, radius, 0, 2 * Math.PI);
 				ctx.fill();
@@ -345,29 +352,70 @@
 					}
 				}, options);
 				formatFloat(conf, ['size']);
-				ctx.save();
-				ctx.beginPath();
-				ctx.strokeStyle = rgbaToStr(conf.color);
 
-				var pm = getMiddle(p1, p2);
 				var pos1 = project(p1);
 				var pos2 = project(p2);
+				var pm = getMiddlePoint(p1, p2);
 				var posm = project(pm);
 
-				var color = conf.color;
-				var hsl = rgbToHsl(color.r, color.g, color.b);
-				hsl[2] = Math.sqrt(posm.ratio) * hsl[2];
-				var rgb = hslToRgb.apply(null, hsl);
-				color.r = rgb[0];
-				color.g = rgb[1];
-				color.b = rgb[2];
-				ctx.fillStyle = rgbaToStr(color);
-
+				var color = projectColor(conf.color, posm.ratio);
 				var size = posm.ratio * conf.size;
-				ctx.lineWidth = size;
 
+				ctx.save();
+				ctx.beginPath();
+				ctx.strokeStyle = rgbaToStr(color);
+				ctx.fillStyle = rgbaToStr(color);
+				ctx.lineWidth = size;
 				ctx.moveTo(pos1.x, pos1.y);
 				ctx.lineTo(pos2.x, pos2.y);
+				ctx.stroke();
+				ctx.restore();
+			}
+
+			// 画流星
+			function drawMeteor(p1, p2, options) {
+				if (!p1) return;
+				if (!p2) return;
+				var conf = assign({
+					size: 1,
+					percent: 50,
+					length: 10,
+					color: {
+						r: 0,
+						g: 0,
+						b: 0,
+						a: 1
+					}
+				}, options);
+				formatFloat(conf, ['size', 'percent']);
+
+				var percent = limit(conf.percent, 0, 100);
+				var tailPercent = percent - conf.length;
+				tailPercent = limit(tailPercent, 0, 100);
+
+				// 求得流星头部和尾部点的位置
+				var ph = getLinePoint(p1, p2, percent);
+				var pt = getLinePoint(p1, p2, tailPercent);
+
+				// 求得投影变换后的位置
+				var posh = project(ph);
+				var post = project(pt);
+
+				// 求得中点，用于同步渲染颜色
+				var pm = getMiddlePoint(p1, p2);
+				var posm = project(pm);
+
+				var color = projectColor(conf.color, posm.ratio);
+				var size = posm.ratio * conf.size;
+
+				ctx.save();
+				ctx.beginPath();
+				ctx.lineCap = 'round';
+				ctx.strokeStyle = rgbaToStr(color);
+				ctx.fillStyle = rgbaToStr(color);
+				ctx.lineWidth = size;
+				ctx.moveTo(posh.x, posh.y);
+				ctx.lineTo(post.x, post.y);
 				ctx.stroke();
 				ctx.restore();
 			}
@@ -509,8 +557,28 @@
 				drawPoint({
 					x: vertex.px,
 					y: vertex.py,
-					z: vertex.pz,
+					z: vertex.pz
+				}, {
 					size: 10,
+					color: assign({}, MESH_COLOR)
+				});
+			}
+
+			// 在网格线上画流星
+			function drawMeshMetor(v1, v2, options) {
+				if (!v1) return;
+				if (!v2) return;
+				drawMeteor({
+					x: v1.px,
+					y: v1.py,
+					z: v1.pz
+				}, {
+					x: v2.px,
+					y: v2.py,
+					z: v2.pz
+				}, {
+					size: 5,
+					percent: 50,
 					color: assign({}, MESH_COLOR)
 				});
 			}
@@ -562,6 +630,9 @@
 						if (!line.drawed) {
 							drawMeshLine(line);
 							line.drawed = true;
+
+							// 在这里插入流星绘制
+							drawMeshMetor(vertex, arroundVertex);
 						}
 						return arroundVertex;
 					});

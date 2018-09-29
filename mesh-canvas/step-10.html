@@ -568,7 +568,9 @@
 					// 再画点
 					drawMeshPoint(vertex);
 					vertex.drawed = true;
-					arroundVertexes.forEach(walk);
+					setTimeout(function() {
+						arroundVertexes.forEach(walk);
+					}, 1000);
 				}
 
 				walk(farthestVertex);
