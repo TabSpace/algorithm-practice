@@ -364,7 +364,7 @@
 				var conf = assign({
 					size: 1,
 					percent: 50,
-					length: 10,
+					length: 20,
 					color: {
 						r: 0,
 						g: 0,
@@ -396,8 +396,12 @@
 				ctx.save();
 				ctx.beginPath();
 				ctx.lineCap = 'round';
-				ctx.strokeStyle = rgbaToStr(color);
-				ctx.fillStyle = rgbaToStr(color);
+				var gradient = ctx.createLinearGradient(posh.x, posh.y, post.x, post.y);
+				gradient.addColorStop(0, rgbaToStr(color));
+				color.a = 0;
+				gradient.addColorStop(1, rgbaToStr(color));
+				ctx.strokeStyle = gradient;
+				ctx.fillStyle = gradient;
 				ctx.lineWidth = size;
 				ctx.moveTo(posh.x, posh.y);
 				ctx.lineTo(post.x, post.y);
