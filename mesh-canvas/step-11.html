@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=0">
+	<meta http-equiv="X-UA-Compatible" content="ie=edge">
+	<title>mesh-canvas</title>
+	<style>
+		body {
+			margin: 0;
+			padding: 0;
+			background-color: #333;
+		}
+
+		.demo {
+			position: relative;
+			margin: 10px auto;
+			width: 480px;
+			height: 270px;
+			border: 1px solid #fff;
+		}
+
+		.demo canvas {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+		}
+
+		.intro {
+			width: 600px;
+			margin: 20px auto;
+			color: #fff;
+			text-align: left;
+		}
+
+		a {
+			color: #fff;
+		}
+
+		a:visited {
+			color: #fff;
+		}
+
+	</style>
+</head>
+
+<body>
+	<ol class="intro">
+		<li>现在解决流星绘制问题</li>
+		<li>定义一个流星结构，它存储了以下几个信息</li>
+		<li>起始点，目标点，路径百分比</li>
+		<li>过程中我们优化代码，将一些步骤封装起来</li>
+	</ol>
+	<div class="demo">
+		<canvas id="canvas" width="480" height="270"></canvas>
+	</div>
+	<script>
+		{
+			var canvas = document.getElementById('canvas');
+			var ctx = canvas.getContext('2d');
+
+			var PERSPECTIVE_DISTANCE = 200;
+			var OUTLINE_DIFFERENCE = 10;
+			var CENTER = {x: 0, y: 0, z: 0};
+			var MESH_COLOR = {r: 255, g: 149, b: 1 ,a: 1};
+
+			// 限制一个数值在范围内
+			function limit(num, min, max) {
+				return Math.min(Math.max(num, min), max);
+			}
+
+			/**
+			 * 扩展并覆盖对象
+			 * @module
+			 * @param {object} obj 要扩展的对象
+			 * @param {object} item 要扩展的属性键值对
+			 * @return {object} 扩展后的源对象
+			 * @example
+			 * var obj = {a:1,b:2};
+			 * console.info(assign(obj,{b:3,c:4}));	//{a:1,b:3,c:4}
+			 */
+			function assign(obj) {
+				obj = obj || {};
+				Array.prototype.slice.call(arguments, 1).forEach(function (source) {
+					var prop;
+					source = source || {};
+					for (prop in source) {
+						if (source.hasOwnProperty(prop)) {
+							obj[prop] = source[prop];
+						}
+					}
+				});
+				return obj;
+			}
+
+			/**
+			 * 确认对象是否在数组中
+			 * @module
+			 * @param {array} arr 要操作的数组
+			 * @param {*} item 要搜索的对象
+			 * @return {boolean} 如果对象在数组中，返回true
+			 * @example
+			 * console.info(contains([1,2,3,4,5],3));	//true
+			 */
+			function contains(arr, item) {
+				var index = arr.indexOf(item);
+				return index >= 0;
+			}
+
+			/**
+			 * 确认对象是否在数组中，不存在则将对象插入到数组中
+			 * @module
+			 * @param {array} arr 要操作的数组
+			 * @param {*} item 要插入的对象
+			 * @return {array} 经过处理的源数组
+			 * @example
+			 * console.info(include([1,2,3],4));	//[1,2,3,4]
+			 * console.info(include([1,2,3],3));	//[1,2,3]
+			 */
+			function include(arr, item) {
+				if (!contains(arr, item)) {
+					arr.push(item);
+				}
+				return arr;
+			}
+
+			// 格式化数据为 Float 类型
+			function formatFloat(obj, keys) {
+				if (Array.isArray(keys)) {
+					keys.forEach(function (key) {
+						obj[key] = parseFloat(obj[key]);
+					});
+				}
+			}
+
+			// 获取线段中点
+			function getMiddlePoint(p1, p2) {
+				return {
+					x: (p1.x + p2.x) / 2,
+					y: (p1.y + p2.y) / 2,
+					z: (p1.z + p2.z) / 2
+				};
+			}
+
+			// 获取线段上的某一点
+			function getLinePoint(p1, p2, percent) {
+				var pm = {};
+				pm.x = (p2.x - p1.x) * (percent / 100) + p1.x;
+				pm.y = (p2.y - p1.y) * (percent / 100) + p1.y;
+				pm.z = (p2.z - p1.z) * (percent / 100) + p1.z;
+				return pm;
+			}
+
+			// 我们抄来这个投影公式
+			// 但需要实际理解投影原理，然后再变更它
+			function project(vertex) {
+				var pos = {};
+				// Distance between the camera and the plane
+				// 这里需要画图解释为什么使用负值
+				var distance = 0 - PERSPECTIVE_DISTANCE;
+				var ratio = distance / (distance + vertex.z);
+
+				// 改造成我们所需的效果
+				pos.ratio = ratio;
+				pos.x = ratio * vertex.x;
+				pos.y = ratio * vertex.y;
+				pos.z = vertex.z;
+
+				return pos;
+			}
+
+			// Rotate a vertice
+			// theta 是绕 Z 顺时针旋转
+			// phi 是绕 X 顺时针旋转
+			function rotate(vertex, center, theta, phi) {
+				// Rotation matrix coefficients
+				var ct = Math.cos(theta);
+				var st = Math.sin(theta);
+				var cp = Math.cos(phi);
+				var sp = Math.sin(phi);
+
+				// Rotation
+				var x = vertex.x - center.x;
+				var y = vertex.y - center.y;
+				var z = vertex.z - center.z;
+
+				vertex.x = ct * x - st * cp * y + st * sp * z + center.x;
+				vertex.y = st * x + ct * cp * y - ct * sp * z + center.y;
+				vertex.z = sp * y + cp * z + center.z;
+			}
+
+			/**
+			 * RGB 颜色值转换为 HSL.
+			 * 转换公式参考自 http://en.wikipedia.org/wiki/HSL_color_space.
+			 * r, g, 和 b 需要在 [0, 255] 范围内
+			 * 返回的 h, s, 和 l 在 [0, 1] 之间
+			 *
+			 * @param   Number  r       红色色值
+			 * @param   Number  g       绿色色值
+			 * @param   Number  b       蓝色色值
+			 * @return  Array           HSL各值数组
+			 */
+			function rgbToHsl(r, g, b) {
+				r /= 255, g /= 255, b /= 255;
+				var max = Math.max(r, g, b),
+					min = Math.min(r, g, b);
+				var h, s, l = (max + min) / 2;
+
+				if (max == min) {
+					h = s = 0; // achromatic
+				} else {
+					var d = max - min;
+					s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+					switch (max) {
+						case r:
+							h = (g - b) / d + (g < b ? 6 : 0);
+							break;
+						case g:
+							h = (b - r) / d + 2;
+							break;
+						case b:
+							h = (r - g) / d + 4;
+							break;
+					}
+					h /= 6;
+				}
+
+				return [h, s, l];
+			}
+
+			/**
+			 * HSL颜色值转换为RGB.
+			 * 换算公式改编自 http://en.wikipedia.org/wiki/HSL_color_space.
+			 * h, s, 和 l 设定在 [0, 1] 之间
+			 * 返回的 r, g, 和 b 在 [0, 255]之间
+			 *
+			 * @param   Number  h       色相
+			 * @param   Number  s       饱和度
+			 * @param   Number  l       亮度
+			 * @return  Array           RGB色值数值
+			 */
+			function hslToRgb(h, s, l) {
+				var r, g, b;
+
+				if (s == 0) {
+					r = g = b = l; // achromatic
+				} else {
+					var hue2rgb = function hue2rgb(p, q, t) {
+						if (t < 0) t += 1;
+						if (t > 1) t -= 1;
+						if (t < 1 / 6) return p + (q - p) * 6 * t;
+						if (t < 1 / 2) return q;
+						if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+						return p;
+					}
+
+					var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+					var p = 2 * l - q;
+					r = hue2rgb(p, q, h + 1 / 3);
+					g = hue2rgb(p, q, h);
+					b = hue2rgb(p, q, h - 1 / 3);
+				}
+
+				return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+			}
+
+			// 生成可赋值的rgba属性字符串
+			function rgbaToStr(color) {
+				color = color || {};
+				return [
+					'rgba(' + color.r,
+					color.g,
+					color.b,
+					color.a + ')'
+				].join(',');
+			}
+
+			// 求得投影颜色
+			// 投影是线性变换，颜色变换转成 hsl 表示方式，也很容易实现
+			// hsl 中的 l 指的是亮度，我们要改变的就是它
+			function projectColor(color, ratio) {
+				color = assign({}, color);
+				var hsl = rgbToHsl(color.r, color.g, color.b);
+				// 用比例值开平方舒缓一下色值明暗变化的剧烈程度
+				hsl[2] = Math.sqrt(ratio) * hsl[2];
+				var rgb = hslToRgb.apply(null, hsl);
+				color.r = rgb[0];
+				color.g = rgb[1];
+				color.b = rgb[2];
+				return color;
+			}
+
+			// 画点
+			function drawPoint(point, options) {
+				if (!point) return;
+				var conf = assign({
+					size: 0,
+					color: {
+						r: 0,
+						g: 0,
+						b: 0,
+						a: 1
+					}
+				}, options);
+				formatFloat(point, ['x', 'y', 'z']);
+				formatFloat(conf, ['size']);
+
+				var pos = project(point);
+				var color = projectColor(conf.color, pos.ratio);
+				// radius 所受的影响与坐标其实一致
+				var radius = (pos.ratio * conf.size) / 2;
+
+				// 坑：每次绘制一个新的图形，都要调用一次 beginPath
+				ctx.save();
+				ctx.fillStyle = rgbaToStr(color);
+				ctx.beginPath();
+				ctx.arc(pos.x, pos.y, radius, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.restore();
+			}
+
+			// 画线
+			// 改造方法适配投影坐标
+			function drawLine(p1, p2, options) {
+				if (!p1) return;
+				if (!p2) return;
+				var conf = assign({
+					size: 1,
+					color: {
+						r: 0,
+						g: 0,
+						b: 0,
+						a: 1
+					}
+				}, options);
+				formatFloat(conf, ['size']);
+
+				var pos1 = project(p1);
+				var pos2 = project(p2);
+				var pm = getMiddlePoint(p1, p2);
+				var posm = project(pm);
+
+				var color = projectColor(conf.color, posm.ratio);
+				var size = posm.ratio * conf.size;
+
+				ctx.save();
+				ctx.beginPath();
+				ctx.strokeStyle = rgbaToStr(color);
+				ctx.fillStyle = rgbaToStr(color);
+				ctx.lineWidth = size;
+				ctx.moveTo(pos1.x, pos1.y);
+				ctx.lineTo(pos2.x, pos2.y);
+				ctx.stroke();
+				ctx.restore();
+			}
+
+			// 画流星
+			function drawMeteor(p1, p2, options) {
+				if (!p1) return;
+				if (!p2) return;
+				var conf = assign({
+					size: 1,
+					percent: 50,
+					length: 20,
+					color: {
+						r: 0,
+						g: 0,
+						b: 0,
+						a: 1
+					}
+				}, options);
+				formatFloat(conf, ['size', 'percent']);
+
+				var percent = limit(conf.percent, 0, 100);
+				var tailPercent = percent - conf.length;
+				tailPercent = limit(tailPercent, 0, 100);
+
+				// 求得流星头部和尾部点的位置
+				var ph = getLinePoint(p1, p2, percent);
+				var pt = getLinePoint(p1, p2, tailPercent);
+
+				// 求得投影变换后的位置
+				var posh = project(ph);
+				var post = project(pt);
+
+				// 求得中点，用于同步渲染颜色
+				var pm = getMiddlePoint(p1, p2);
+				var posm = project(pm);
+
+				var color = projectColor(conf.color, posm.ratio);
+				var size = posm.ratio * conf.size;
+
+				ctx.save();
+				ctx.beginPath();
+				ctx.lineCap = 'round';
+				var gradient = ctx.createLinearGradient(posh.x, posh.y, post.x, post.y);
+				gradient.addColorStop(0, rgbaToStr(color));
+				color.a = 0;
+				gradient.addColorStop(1, rgbaToStr(color));
+				ctx.strokeStyle = gradient;
+				ctx.fillStyle = gradient;
+				ctx.lineWidth = size;
+				ctx.moveTo(posh.x, posh.y);
+				ctx.lineTo(post.x, post.y);
+				ctx.stroke();
+				ctx.restore();
+			}
+
+			// 根据顶点id获取规范的lineId
+			function getLineId(p1, p2) {
+				var p1 = parseInt(p1, 10);
+				var p2 = parseInt(p2, 10);
+				var lineId = '';
+				// 相同点不建立连线
+				// 线段无方向要求
+				if (p1 < p2) {
+					lineId = p1 + '-' + p2;
+				} else if (p1 > p2) {
+					lineId = p2 + '-' + p1;
+				}
+				return lineId;
+			}
+
+			// 重新梳理数据结构
+			// 建立点和线的联系，便于后续使用
+			// 返回网格对象
+			function buildMesh(vertexes) {
+				console.time('build mesh');
+				var mesh = {};
+				mesh.vertexes = {};
+				mesh.lines = {};
+				vertexes.forEach(function (point, index) {
+					var vertex = {};
+					// 顶点原始位置
+					vertex.x = point[0];
+					vertex.y = point[1];
+					vertex.z = point[2];
+					// 顶点变换后位置
+					vertex.px = point[0];
+					vertex.py = point[1];
+					vertex.pz = point[2];
+
+					vertex.id = '' + index;
+					vertex.arround = [];
+					mesh.vertexes[vertex.id] = vertex;
+				});
+
+				var vertexIds = Object.keys(mesh.vertexes);
+				var allLines = {};
+				var shortestLine = null;
+				// 每个点和其他点都接触一遍，就能遍历所有连线
+				vertexIds.forEach(function (id) {
+					var p1 = id;
+					vertexIds.forEach(function (vid) {
+						var p2 = vid;
+						var lineId = getLineId(p1, p2);
+						if (!lineId) {
+							return;
+						}
+
+						// 用统一命名方式来排重
+						if (allLines[lineId]) {
+							return;
+						} else {
+							var line = {};
+							line.id = lineId;
+							line.p1 = p1;
+							line.p2 = p2;
+							// 拿到具体顶点坐标来计算顶点距离
+							var v1 = mesh.vertexes[p1];
+							var v2 = mesh.vertexes[p2];
+							// http://www.osgeo.cn/app/sa915
+							// 这公式套的不要太舒服
+							line.distance = Math.sqrt(
+								Math.pow((v1.x - v2.x), 2) +
+								Math.pow((v1.y - v2.y), 2) +
+								Math.pow((v1.z - v2.z), 2)
+							);
+							if (!shortestLine) {
+								shortestLine = line;
+							} else if (shortestLine.distance > line.distance) {
+								shortestLine = line;
+							}
+							allLines[lineId] = line;
+						}
+					});
+				});
+
+				// 我们只要距离在一定范围内的线段
+				var shortestLineDistance = shortestLine.distance;
+				Object.keys(allLines).forEach(function (lineId) {
+					var line = allLines[lineId];
+					if (line.distance <= (shortestLineDistance + OUTLINE_DIFFERENCE)) {
+						mesh.lines[lineId] = line;
+					}
+				});
+
+				// 建立点与其他点之间的关系，便于之后动画处理
+				Object.keys(mesh.lines).forEach(function (lineId) {
+					var line = mesh.lines[lineId];
+					var v1 = mesh.vertexes[line.p1];
+					var v2 = mesh.vertexes[line.p2];
+					include(v1.arround, line.p2);
+					include(v2.arround, line.p1);
+				});
+
+				console.timeEnd('build mesh');
+				console.log('mesh:', mesh);
+				return mesh;
+			}
+
+			// 旋转网格
+			function rotateMesh(mesh, theta, phi) {
+				Object.keys(mesh.vertexes).forEach(function (id) {
+					var vertex = mesh.vertexes[id];
+					var pos = {
+						x: vertex.x,
+						y: vertex.y,
+						z: vertex.z
+					};
+					// 注意这里顺序很重要
+					// 想想为什么要先旋转，再投影
+					// 调整参数，了解2个角度参数都是向哪个角度旋转
+					rotate(
+						pos,
+						CENTER,
+						theta,
+						phi
+					);
+					// 存储三维数据到模型，后面复用
+					vertex.px = pos.x;
+					vertex.py = pos.y;
+					vertex.pz = pos.z;
+				});
+			}
+
+			// 画网格线
+			function drawMeshLine(mesh, line) {
+				if (!line) return;
+				var v1 = mesh.vertexes[line.p1];
+				var v2 = mesh.vertexes[line.p2];
+				drawLine({
+					x: v1.px,
+					y: v1.py,
+					z: v1.pz
+				}, {
+					x: v2.px,
+					y: v2.py,
+					z: v2.pz
+				}, {
+					size: 2,
+					color: assign({}, MESH_COLOR)
+				});
+			}
+
+			// 画网格点
+			function drawMeshPoint(vertex) {
+				if (!vertex) return;
+				drawPoint({
+					x: vertex.px,
+					y: vertex.py,
+					z: vertex.pz
+				}, {
+					size: 10,
+					color: assign({}, MESH_COLOR)
+				});
+			}
+
+			// 在网格线上画流星
+			function drawMeshMetor(v1, v2, options) {
+				if (!v1) return;
+				if (!v2) return;
+				drawMeteor({
+					x: v1.px,
+					y: v1.py,
+					z: v1.pz
+				}, {
+					x: v2.px,
+					y: v2.py,
+					z: v2.pz
+				}, {
+					size: 5,
+					percent: 50,
+					color: assign({}, MESH_COLOR)
+				});
+			}
+
+			// 获取最远的点
+			function getFarthestVertex(mesh) {
+				var farthestVertex = null;
+				Object.keys(mesh.vertexes).forEach(function (id) {
+					var vertex = mesh.vertexes[id];
+					if (!farthestVertex) {
+						farthestVertex = vertex;
+					} else if (vertex.pz < farthestVertex.pz) {
+						farthestVertex = vertex;
+					}
+				});
+				return farthestVertex;
+			}
+
+			// 绘制网格
+			function drawMesh(mesh) {
+				var farthestVertex = getFarthestVertex(mesh);
+				var walkStep = 0;
+				// 递归方式广度优先遍历所有点
+				function walk(vertex) {
+					if (vertex.drawed) return;
+					walkStep++;
+					var arroundVertexes = vertex.arround.map(function (id) {
+						var arroundVertex = mesh.vertexes[id];
+						var lineId = getLineId(vertex.id, arroundVertex.id);
+						var line = mesh.lines[lineId];
+						// 先画线
+						if (!line.drawed) {
+							drawMeshLine(mesh, line);
+							line.drawed = true;
+
+							// 先在这里插入流星绘制
+							drawMeshMetor(vertex, arroundVertex);
+						}
+						return arroundVertex;
+					});
+					// 再画点
+					drawMeshPoint(vertex);
+					vertex.drawed = true;
+					arroundVertexes.forEach(walk);
+				}
+				walk(farthestVertex);
+				console.log('walkStep:', walkStep);
+			}
+
+			// 参照 css3 标准，z 轴正值朝向近处，物体会放大
+			// 立方体一共 8 个点
+			var polyhedronVertexes = [
+				[-50, -50, -50],
+				[50, -50, -50],
+				[50, 50, -50],
+				[-50, 50, -50],
+				[-50, -50, 50],
+				[50, -50, 50],
+				[50, 50, 50],
+				[-50, 50, 50]
+			];
+
+			// 生成网格对象
+			var polyhedron = buildMesh(polyhedronVertexes);
+
+			// 不断精简 render 体积，变成方法调用集合
+			// 便于之后动画执行时梳理代码整洁度
+			function render() {
+				rotateMesh(polyhedron, Math.PI / 4, Math.PI / 3);
+				drawMesh(polyhedron);
+			}
+
+			// 原点移动到中心
+			ctx.translate(canvas.width / 2, canvas.height / 2);
+			ctx.save();
+
+			console.time('render');
+			render();
+			console.timeEnd('render');
+		}
+
+	</script>
+</body>
+
+</html>
