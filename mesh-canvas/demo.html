@@ -17,7 +17,7 @@
 			position: relative;
 			margin: 10px auto;
 			width: 480px;
-			height: 270px;
+			height: 480px;
 			border: 1px solid #fff;
 		}
 
@@ -49,13 +49,14 @@
 
 <body>
 	<ol class="intro">
-		<li>现在解决流星绘制问题</li>
-		<li>定义一个流星结构，它存储了以下几个信息</li>
-		<li>起始点，目标点，路径百分比</li>
-		<li>过程中我们优化代码，将一些步骤封装起来</li>
+		<li>实现点的高亮，添加光晕</li>
+		<li>调整页面参数优化展示效果</li>
+		<li>完善流星绘制问题</li>
+		<li>考虑它刚出现的情况</li>
+		<li>考虑它已到达线段头的情况</li>
 	</ol>
 	<div class="demo">
-		<canvas id="canvas" width="480" height="270"></canvas>
+		<canvas id="canvas" width="480" height="480"></canvas>
 	</div>
 	<script>
 		{
@@ -65,7 +66,15 @@
 			var PERSPECTIVE_DISTANCE = 200;
 			var OUTLINE_DIFFERENCE = 10;
 			var CENTER = {x: 0, y: 0, z: 0};
-			var MESH_COLOR = {r: 255, g: 149, b: 1 ,a: 1};
+
+			var MESH_POINT_COLOR = {r: 255, g: 145, b: 0 ,a: 1};
+			var MESH_POINT_SIZE = 8;
+
+			var MESH_LINE_COLOR = MESH_POINT_COLOR;
+			var MESH_LINE_SIZE = 1;
+
+			var METOR_COLOR = {r: 255, g: 211, b: 153 ,a: 1};
+			var METOR_SIZE = 3;
 
 			// 限制一个数值在范围内
 			function limit(num, min, max) {
@@ -293,11 +302,24 @@
 				return color;
 			}
 
+			// 求得亮度不同的颜色
+			function lchangeColor(color, ratio) {
+				color = assign({}, color);
+				var hsl = rgbToHsl(color.r, color.g, color.b);
+				hsl[2] = ratio * hsl[2];
+				var rgb = hslToRgb.apply(null, hsl);
+				color.r = rgb[0];
+				color.g = rgb[1];
+				color.b = rgb[2];
+				return color;
+			}
+
 			// 画点
 			function drawPoint(point, options) {
 				if (!point) return;
 				var conf = assign({
 					size: 0,
+					highlight: 2.5,
 					color: {
 						r: 0,
 						g: 0,
@@ -309,9 +331,16 @@
 				formatFloat(conf, ['size']);
 
 				var pos = project(point);
-				var color = projectColor(conf.color, pos.ratio);
 				// radius 所受的影响与坐标其实一致
 				var radius = (pos.ratio * conf.size) / 2;
+				var color = projectColor(conf.color, pos.ratio);
+
+				var highlight = conf.highlight;
+				highlight = limit(highlight, 1, 3);
+				var highlightRatio = highlight;
+				var highlightColor = projectColor(conf.color, highlightRatio);
+				var highlightRadius = radius * highlightRatio;
+				console.log('highlightRadius:', highlightRadius);
 
 				// 坑：每次绘制一个新的图形，都要调用一次 beginPath
 				ctx.save();
@@ -319,6 +348,17 @@
 				ctx.beginPath();
 				ctx.arc(pos.x, pos.y, radius, 0, 2 * Math.PI);
 				ctx.fill();
+
+				var gradient = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, highlightRadius);
+				highlightColor.a = 1;
+				gradient.addColorStop(0, rgbaToStr(highlightColor));
+				highlightColor.a = 0;
+				gradient.addColorStop(1, rgbaToStr(highlightColor));
+				ctx.fillStyle = gradient;
+				ctx.beginPath();
+				ctx.arc(pos.x, pos.y, highlightRadius, 0, 2 * Math.PI);
+				ctx.fill();
+
 				ctx.restore();
 			}
 
@@ -364,7 +404,7 @@
 				var conf = assign({
 					size: 1,
 					percent: 50,
-					length: 20,
+					length: 30,
 					color: {
 						r: 0,
 						g: 0,
@@ -375,7 +415,8 @@
 				formatFloat(conf, ['size', 'percent']);
 
 				var percent = limit(conf.percent, 0, 100);
-				var tailPercent = percent - conf.length;
+				// 使用原始值，过量的百分比可绘制流星进入节点的效果
+				var tailPercent = conf.percent - conf.length;
 				tailPercent = limit(tailPercent, 0, 100);
 
 				// 求得流星头部和尾部点的位置
@@ -551,8 +592,8 @@
 					y: v2.py,
 					z: v2.pz
 				}, {
-					size: 2,
-					color: assign({}, MESH_COLOR)
+					size: MESH_LINE_SIZE,
+					color: assign({}, MESH_LINE_COLOR)
 				});
 			}
 
@@ -564,8 +605,8 @@
 					y: vertex.py,
 					z: vertex.pz
 				}, {
-					size: 10,
-					color: assign({}, MESH_COLOR)
+					size: MESH_POINT_SIZE,
+					color: assign({}, MESH_POINT_COLOR)
 				});
 			}
 
@@ -573,6 +614,11 @@
 			function drawMeshMetor(v1, v2, options) {
 				if (!v1) return;
 				if (!v2) return;
+				var conf = assign({
+					size: METOR_SIZE,
+					percent: 50,
+					color: assign({}, METOR_COLOR)
+				}, options);
 				drawMeteor({
 					x: v1.px,
 					y: v1.py,
@@ -581,11 +627,7 @@
 					x: v2.px,
 					y: v2.py,
 					z: v2.pz
-				}, {
-					size: 5,
-					percent: 50,
-					color: assign({}, MESH_COLOR)
-				});
+				}, conf);
 			}
 
 			// 获取最远的点
@@ -614,17 +656,24 @@
 						var arroundVertex = mesh.vertexes[id];
 						var lineId = getLineId(vertex.id, arroundVertex.id);
 						var line = mesh.lines[lineId];
-						// 先画线
 						if (!line.drawed) {
 							drawMeshLine(mesh, line);
 							line.drawed = true;
 
-							// 先在这里插入流星绘制
-							drawMeshMetor(vertex, arroundVertex);
+							// 在这里插入流星绘制
+							drawMeshMetor(vertex, arroundVertex, {
+								percent: 10
+							});
+							drawMeshMetor(vertex, arroundVertex, {
+								percent: 50
+							});
+							drawMeshMetor(vertex, arroundVertex, {
+								percent: 110
+							});
 						}
 						return arroundVertex;
 					});
-					// 再画点
+					// 先画线，再画点
 					drawMeshPoint(vertex);
 					vertex.drawed = true;
 					arroundVertexes.forEach(walk);
