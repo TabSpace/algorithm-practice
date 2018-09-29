@@ -52,6 +52,7 @@
 		<li>现在解决流星绘制问题</li>
 		<li>定义一个流星结构，它存储了以下几个信息</li>
 		<li>起始点，目标点，路径百分比</li>
+		<li>过程中我们优化代码，将一些步骤封装起来</li>
 	</ol>
 	<div class="demo">
 		<canvas id="canvas" width="480" height="270"></canvas>
@@ -63,24 +64,8 @@
 
 			var PERSPECTIVE_DISTANCE = 200;
 			var OUTLINE_DIFFERENCE = 10;
-			var CENTER = {
-				x: 0,
-				y: 0,
-				z: 0
-			};
-			var MESH_COLOR = {
-				r: 255,
-				g: 149,
-				b: 1,
-				a: 1
-			};
-
-			// 原点移动到中心
-			ctx.translate(
-				canvas.width / 2,
-				canvas.height / 2
-			);
-			ctx.save();
+			var CENTER = {x: 0, y: 0, z: 0};
+			var MESH_COLOR = {r: 255, g: 149, b: 1 ,a: 1};
 
 			// 限制一个数值在范围内
 			function limit(num, min, max) {
@@ -438,16 +423,22 @@
 			// 重新梳理数据结构
 			// 建立点和线的联系，便于后续使用
 			// 返回网格对象
-			function getMesh(vertexes) {
+			function buildMesh(vertexes) {
 				console.time('build mesh');
 				var mesh = {};
 				mesh.vertexes = {};
 				mesh.lines = {};
 				vertexes.forEach(function (point, index) {
 					var vertex = {};
+					// 顶点原始位置
 					vertex.x = point[0];
 					vertex.y = point[1];
 					vertex.z = point[2];
+					// 顶点变换后位置
+					vertex.px = point[0];
+					vertex.py = point[1];
+					vertex.pz = point[2];
+
 					vertex.id = '' + index;
 					vertex.arround = [];
 					mesh.vertexes[vertex.id] = vertex;
@@ -517,26 +508,36 @@
 				return mesh;
 			}
 
-			// 参照 css3 标准，z 轴正值朝向近处，物体会放大
-			// 立方体一共 8 个点
-			var polyhedronVertexes = [
-				[-50, -50, -50],
-				[50, -50, -50],
-				[50, 50, -50],
-				[-50, 50, -50],
-				[-50, -50, 50],
-				[50, -50, 50],
-				[50, 50, 50],
-				[-50, 50, 50]
-			];
-
-			var polyhedron = getMesh(polyhedronVertexes);
+			// 旋转网格
+			function rotateMesh(mesh, theta, phi) {
+				Object.keys(mesh.vertexes).forEach(function (id) {
+					var vertex = mesh.vertexes[id];
+					var pos = {
+						x: vertex.x,
+						y: vertex.y,
+						z: vertex.z
+					};
+					// 注意这里顺序很重要
+					// 想想为什么要先旋转，再投影
+					// 调整参数，了解2个角度参数都是向哪个角度旋转
+					rotate(
+						pos,
+						CENTER,
+						theta,
+						phi
+					);
+					// 存储三维数据到模型，后面复用
+					vertex.px = pos.x;
+					vertex.py = pos.y;
+					vertex.pz = pos.z;
+				});
+			}
 
 			// 画网格线
-			function drawMeshLine(line) {
+			function drawMeshLine(mesh, line) {
 				if (!line) return;
-				var v1 = polyhedron.vertexes[line.p1];
-				var v2 = polyhedron.vertexes[line.p2];
+				var v1 = mesh.vertexes[line.p1];
+				var v2 = mesh.vertexes[line.p2];
 				drawLine({
 					x: v1.px,
 					y: v1.py,
@@ -583,55 +584,38 @@
 				});
 			}
 
-			function render() {
-
+			// 获取最远的点
+			function getFarthestVertex(mesh) {
 				var farthestVertex = null;
-				// 模型旋转
-				Object.keys(polyhedron.vertexes).forEach(function (id) {
-					var vertex = polyhedron.vertexes[id];
-					var pos = {
-						x: vertex.x,
-						y: vertex.y,
-						z: vertex.z
-					};
-					// 注意这里顺序很重要
-					// 想想为什么要先旋转，再投影
-					// 调整参数，了解2个角度参数都是向哪个角度旋转
-					rotate(
-						pos,
-						CENTER,
-						Math.PI / 4,
-						Math.PI / 3
-					);
-					// 存储三维数据到模型，后面复用
-					vertex.px = pos.x;
-					vertex.py = pos.y;
-					vertex.pz = pos.z;
-
-					// 找到最远的那个点
+				Object.keys(mesh.vertexes).forEach(function (id) {
+					var vertex = mesh.vertexes[id];
 					if (!farthestVertex) {
 						farthestVertex = vertex;
 					} else if (vertex.pz < farthestVertex.pz) {
 						farthestVertex = vertex;
 					}
 				});
+				return farthestVertex;
+			}
 
+			// 绘制网格
+			function drawMesh(mesh) {
+				var farthestVertex = getFarthestVertex(mesh);
 				var walkStep = 0;
-
 				// 递归方式广度优先遍历所有点
 				function walk(vertex) {
 					if (vertex.drawed) return;
 					walkStep++;
 					var arroundVertexes = vertex.arround.map(function (id) {
-						var arroundVertex = polyhedron.vertexes[id];
+						var arroundVertex = mesh.vertexes[id];
 						var lineId = getLineId(vertex.id, arroundVertex.id);
-						var line = polyhedron.lines[lineId];
+						var line = mesh.lines[lineId];
 						// 先画线
 						if (!line.drawed) {
-							drawMeshLine(line);
+							drawMeshLine(mesh, line);
 							line.drawed = true;
 
-							// 在这里插入流星绘制
+							// 先在这里插入流星绘制
 							drawMeshMetor(vertex, arroundVertex);
 						}
 						return arroundVertex;
@@ -641,10 +625,36 @@
 					vertex.drawed = true;
 					arroundVertexes.forEach(walk);
 				}
-
 				walk(farthestVertex);
 				console.log('walkStep:', walkStep);
 			}
+
+			// 参照 css3 标准，z 轴正值朝向近处，物体会放大
+			// 立方体一共 8 个点
+			var polyhedronVertexes = [
+				[-50, -50, -50],
+				[50, -50, -50],
+				[50, 50, -50],
+				[-50, 50, -50],
+				[-50, -50, 50],
+				[50, -50, 50],
+				[50, 50, 50],
+				[-50, 50, 50]
+			];
+
+			// 生成网格对象
+			var polyhedron = buildMesh(polyhedronVertexes);
+
+			// 不断精简 render 体积，变成方法调用集合
+			// 便于之后动画执行时梳理代码整洁度
+			function render() {
+				rotateMesh(polyhedron, Math.PI / 4, Math.PI / 3);
+				drawMesh(polyhedron);
+			}
+
+			// 原点移动到中心
+			ctx.translate(canvas.width / 2, canvas.height / 2);
+			ctx.save();
 
 			console.time('render');
 			render();
