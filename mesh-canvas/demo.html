@@ -472,13 +472,22 @@
 
 				metor.life = metor.life || 0;
 				let delay = this.delay;
-
-
+				let percent = 0;
+				let metorLife = this.conf.metorLife;
+				if (metor.life > 0) {
+					metor.life = Util.limit(metor.life - delay, 0, metorLife);
+					percent = (metorLife - metor.life) / metorLife;
+					percent = Util.limit(percent * 100, 0, 100);
+				} else {
+					let line = mesh.lines[metor.lineId];
+					delete line.metors[metor.id];
+					this.giveEnergy(v2);
+				}
 
 				let conf = {
 					size: this.conf.metorSize,
 					length: this.conf.metorLength,
-					percent: 50,
+					percent,
 					color: { ...this.conf.metorColor }
 				};
 				Paint.drawMeteor({
@@ -709,8 +718,6 @@
 				metor.lineId = this.getLineId(metor.start, metor.end);
 				let line = mesh.lines[metor.lineId];
 				line.metors[metor.id] = metor;
-
-				console.log('metor', metor);
 			},
 			// 给一个节点添加能量
 			giveEnergy(point) {
