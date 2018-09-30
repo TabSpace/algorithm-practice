@@ -632,9 +632,22 @@
 					vertex.drawed = true;
 					arroundVertexes.forEach(vertex => this.walk(vertex));
 				},
+				// 重置绘制状态
+				reset() {
+					let mesh = this.mesh;
+					Object.keys(mesh.vertexes).forEach(id => {
+						let vertex = mesh.vertexes[id];
+						vertex.drawed = false;
+					});
+					Object.keys(mesh.lines).forEach(id => {
+						let line = mesh.lines[id];
+						line.drawed = false;
+					});
+				},
 				// 绘制网格
 				draw() {
 					let mesh = this.mesh;
+					this.reset();
 					let farthestVertex = this.getFarthestVertex();
 					this.walk(farthestVertex);
 				},
@@ -680,15 +693,14 @@
 					ctx.restore();
 
 					this.computeFps();
+				},
+				loop() {
+					this.render();
+					window.requestAnimationFrame(() => this.loop());
 				}
 			};
 
-			Scene.render();
-			setTimeout(() => {
-				Scene.render();
-			}, 1000);
-
-			// window.requestAnimationFrame(render);
+			Scene.loop();
 		}
 
 	</script>
