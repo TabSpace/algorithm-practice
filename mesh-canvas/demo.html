@@ -65,12 +65,9 @@
 	</div>
 	<div class="fps" id="fps">0 fps</div>
 	<ol class="intro">
-		<li>现在要让画面动起来</li>
-		<li>我们先组织一下已经编写的方法，然后梳理函数调用步骤</li>
-		<li>我们所希望的光点特效，是从一点引发，途径多条线，最后到达某点消失</li>
-		<li>实际上要做一个粒子系统，管理流星的产生与销毁</li>
-		<li>流星的产生基于一个概率参数</li>
-		<li>流星向下传递还是就地销毁基于赋予的能量</li>
+		<li>现在优化动画效果</li>
+		<li>动画过程中允许产生多个流星</li>
+		<li>起始点赋予能级，每到一个节点削弱一个能级</li>
 	</ol>
 	<script>
 		const canvas = document.getElementById('canvas');
@@ -425,31 +422,39 @@
 				if (!vertex) return;
 				let delay = this.delay;
 				let highlight = 1;
-				let metorEnrgy = this.conf.metorEnrgy;
+				let unitMetorEnergy = this.conf.metorEnergy;
 				let maxHighlight = this.conf.maxHighlight;
+				let pointMaxEnergyLevel = this.conf.pointMaxEnergyLevel;
+				let consumeProbability = this.conf.consumeProbability;
 
 				// 网格节点绘制，同时也是一个消耗节点能量的过程
 				vertex.energy = vertex.energy || 0;
 				vertex.active = vertex.active || 0;
+				vertex.energyLevel = vertex.energyLevel || 0;
 				// 有能量时，把能量传给电灯
 				if (vertex.energy > 0) {
+					let prevEnergyLevel = Math.round(vertex.energy / unitMetorEnergy);
 					vertex.energy -= delay;
-					vertex.energy = Util.limit(vertex.energy, 0, 2 * metorEnrgy);
-					if (vertex.energy <= 0) {
-						// 能量耗尽时发射一颗流星
-						this.shootMetor(vertex);
+					vertex.energy = Util.limit(vertex.energy, 0, pointMaxEnergyLevel * unitMetorEnergy);
+					vertex.energyLevel = Math.round(vertex.energy / unitMetorEnergy);
+					if (vertex.energyLevel < prevEnergyLevel) {
+						// 能量降低一个能级时发射一颗流星
+						// 有一定概率消耗掉一颗流星，不再发射
+						if (Math.random() > consumeProbability) {
+							this.shootMetor(vertex);
+						}
 					}
 					vertex.active += delay;
 				} else if (vertex.active > 0) {
 					// 没有能量时，电灯能量持续消耗
 					vertex.active -= delay;
 					// 电灯能量有一个峰值，到达峰值无法再增加
-					vertex.active = Util.limit(vertex.active, 0, metorEnrgy);
+					vertex.active = Util.limit(vertex.active, 0, unitMetorEnergy);
 				}
 
 				if (vertex.active > 0) {
 					// 把电灯能量与峰值的差距，表示为点的高亮参数
-					let val = vertex.active / metorEnrgy;
+					let val = vertex.active / unitMetorEnergy;
 					highlight += val * (maxHighlight - 1);
 				}
 
@@ -493,8 +498,7 @@
 					// 超量 percent 可绘制流星进入节点的效果
 					percent = Util.limit(percent * maxPaintPercent, 0, maxPaintPercent);
 				} else {
-					let line = mesh.lines[metor.lineId];
-					delete line.metors[metor.id];
+					this.destroyMetor(metor);
 				}
 
 				let conf = {
@@ -711,18 +715,19 @@
 					line.drawed = false;
 				});
 			},
-			// 绘制网格，用于绘制网格单帧
-			draw(delay) {
+			// 销毁一颗流星
+			destroyMetor(metor) {
 				let mesh = this.mesh;
-				this.delay = delay || 0;
-				this.reset();
-				let farthestVertex = this.getFarthestVertex();
-				this.walk(farthestVertex);
+				this.metorCount--;
+				this.metorCount = Math.max(0, this.metorCount);
+				let line = mesh.lines[metor.lineId];
+				delete line.metors[metor.id];
 			},
 			// 创建一颗流星
 			shootMetor(point) {
 				let mesh = this.mesh;
-
+				if (this.metorCount >= this.conf.metorMaxCount) return;
+				this.metorCount++;
 				let metor = {};
 				metor.start = point.id;
 				metor.end = Util.getRandom(point.arround);
@@ -734,13 +739,31 @@
 				line.metors[metor.id] = metor;
 			},
 			// 给一个节点添加能量
-			giveEnergy(point) {
+			giveEnergy(point, energy) {
 				let mesh = this.mesh;
 				if (!point) {
 					let arr = this.getAllVertexes();
 					point = Util.getRandom(arr);
 				}
-				point.energy += this.conf.metorEnrgy;
+				energy = energy || this.conf.metorEnergy;
+				point.energy += energy;
+			},
+			// 绘制网格，用于绘制网格单帧
+			draw(delay) {
+				let mesh = this.mesh;
+				this.delay = delay || 0;
+				this.reset();
+				let farthestVertex = this.getFarthestVertex();
+				if (Math.random() < this.conf.generateProbability) {
+					this.giveEnergy();
+				}
+				if (this.initGenerateCount > 0) {
+					if (Math.random() > this.conf.initGenerateProbability) {
+						this.initGenerateCount--;
+						this.giveEnergy();
+					}
+				}
+				this.walk(farthestVertex);
 			},
 			// 网格对象初始化
 			init(vertexes, options) {
@@ -753,6 +776,8 @@
 					pointColor: {r: 255, g: 145, b: 0 ,a: 1},
 					// 节点尺寸
 					pointSize: 8,
+					// 节点最高能级，值越高，可存储发射的流星越多
+					pointMaxEnergyLevel: 3,
 					// 节点最大高亮参数，选值区间[1,3]
 					maxHighlight: 2.6,
 					// 线条颜色
@@ -768,12 +793,23 @@
 					// 单个线段上的流星寿命
 					metorLife: 1000,
 					// 流星能量，决定了灯能亮多久
-					metorEnrgy: 300,
+					metorEnergy: 300,
+					// 最高流星数量
+					metorMaxCount: 20,
+					// 节点耗尽流星能量的概率，越高流星死的越快
+					consumeProbability: 1 / 10,
+					// 随机给予节点能量的概率，越高产生的流星越多
+					generateProbability: 1 / 50,
+					// 初始化节点赋能数量，越高一开始产生的流星越多
+					initGenerateCount: 5,
+					// 初始化流星产生概率，越高越迅速产生初始化的流星
+					initGenerateProbability: 1 /2,
 					...options
 				};
 				this.metors = {};
+				this.metorCount = 0;
+				this.initGenerateCount = this.conf.initGenerateCount;
 				this.mesh = this.build(vertexes);
-				this.giveEnergy();
 			}
 		};
 
