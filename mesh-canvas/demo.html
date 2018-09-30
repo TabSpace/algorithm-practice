@@ -471,17 +471,30 @@
 				let v2 = mesh.vertexes[metor.end];
 
 				metor.life = metor.life || 0;
+				metor.paintLife = metor.paintLife || 0;
 				let delay = this.delay;
-				let percent = 0;
-				let metorLife = this.conf.metorLife;
+
+				// metor.life 用来判定何时触发下一个节点的点亮
+				let maxMetorLife = this.conf.metorLife;
 				if (metor.life > 0) {
-					metor.life = Util.limit(metor.life - delay, 0, metorLife);
-					percent = (metorLife - metor.life) / metorLife;
-					percent = Util.limit(percent * 100, 0, 100);
+					metor.life = Util.limit(metor.life - delay, 0, maxMetorLife);
+					if (metor.life <= 0) {
+						this.giveEnergy(v2);
+					}
+				}
+
+				// paintLife 决定流星的实际存在时间
+				let percent = 0;
+				let maxPaintPercent = 100 + this.conf.metorLength;
+				let maxPaintLife = this.conf.metorLife * (maxPaintPercent / 100);
+				if (metor.paintLife > 0) {
+					metor.paintLife = Util.limit(metor.paintLife - delay, 0, maxPaintLife);
+					percent = (maxPaintLife - metor.paintLife) / maxPaintLife;
+					// 超量 percent 可绘制流星进入节点的效果
+					percent = Util.limit(percent * maxPaintPercent, 0, maxPaintPercent);
 				} else {
 					let line = mesh.lines[metor.lineId];
 					delete line.metors[metor.id];
-					this.giveEnergy(v2);
 				}
 
 				let conf = {
@@ -714,6 +727,7 @@
 				metor.start = point.id;
 				metor.end = Util.getRandom(point.arround);
 				metor.life = this.conf.metorLife;
+				metor.paintLife = metor.life * ((100 + this.conf.metorLength) / 100);
 				metor.id = + new Date() + '';
 				metor.lineId = this.getLineId(metor.start, metor.end);
 				let line = mesh.lines[metor.lineId];
@@ -749,7 +763,7 @@
 					metorColor: {r: 255, g: 211, b: 153 ,a: 1},
 					// 流星尺寸
 					metorSize: 3,
-					// 流星拖尾长度
+					// 流星拖尾长度(百分比)
 					metorLength: 30,
 					// 单个线段上的流星寿命
 					metorLife: 1000,
