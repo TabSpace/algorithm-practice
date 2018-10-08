@@ -263,19 +263,20 @@
 			// 正N面体的数量是有限制的
 			// 而近似正多面体的生成是复杂的
 			// 我们这里通过一些简单的概念来降低多面体生成的复杂度
+			// 注意这里生成的不是正N面体
 			generateSphereVertexes(options) {
 				let conf = {
-					// 切面数量，极点也算一个切面
-					section: 2,
 					// 极点数量，可选值 [0,1,2]
 					pole: 0,
+					// 切面数量，极点不算切面
+					section: 2,
 					// 每个切面上的顶点数量
 					// 数组元素数量应与切面数量一致
 					vertexOnSection: [
 						4,
 						4
 					],
-					// 球面半径
+					// 球面半径，取值范围 [0, 1000]
 					radius: 50,
 					...options
 				};
@@ -284,22 +285,71 @@
 				let faces = {};
 
 				// 初始化计算数据
-				let poleCount = Util.limit(conf.pole, 0, 2);
-				poleCount = Math.floor(poleCount);
+				let poleCount = Math.floor(Util.limit(conf.pole, 0, 2));
 				let sectionCount = Math.floor(conf.section);
-				sectionCount = Math.max(sectionCount - poleCount, 0);
 
+				// 设向量与 xz 平面夹角为 theta
+				// 设向量与 yz 平面夹角为 alpha
+				// 一个切面上的点与 xz 平面的夹角是一致的
+				// 不同切面与 xz 平面的夹角是均分的
+				let unitTheta = Math.PI / (sectionCount + 1);
+
+				// 构建平面列表
+				let sphereVertexes = [];
+				for (let index = 0; index < sectionCount; index++) {
+					let section = {};
+					section.vertexCount = conf.vertexOnSection[index] || 0;
+					section.theta = (index + 1) * unitTheta - Math.PI / 2;
+					// 每个切面上点的分布是均匀的
+					let unitAlpha = 2 * Math.PI / section.vertexCount;
+					for (let j = 0; j < section.vertexCount; j++) {
+						let vertex = {};
+						// 求得向量坐标
+						vertex.theta = section.theta;
+						vertex.alpha = j * unitAlpha;
+						sphereVertexes.push(vertex);
+					}
+				}
+
+				// 添加极点
+				if (poleCount > 0) {
+					sphereVertexes.unshift({
+						theta: - Math.PI / 2,
+						alpha: 0
+					});
+				}
+				if (poleCount > 1) {
+					sphereVertexes.push({
+						theta: Math.PI / 2,
+						alpha: 0
+					});
+				}
+
+				console.log('sphereVertexes:', sphereVertexes);
 
 				let vertexes = [
-					[-50, -50, -50],
-					[50, -50, -50],
-					[50, 50, -50],
-					[-50, 50, -50],
-					[-50, -50, 50],
-					[50, -50, 50],
 					[50, 50, 50],
-					[-50, 50, 50]
+					[50, -50, 50],
+					[-50, -50, 50],
+					[-50, 50, 50],
+					[50, 50, -50],
+					[50, -50, -50],
+					[-50, -50, -50],
+					[-50, 50, -50]
 				];
+
+				// 向量坐标转化为三维坐标
+				let radius = Util.limit(conf.radius, 0, 1000);
+				vertexes = sphereVertexes.map(vertex => {
+					let x = radius * Math.cos(vertex.theta) * Math.cos(vertex.alpha);
+					let y = radius * Math.sin(vertex.theta);
+					let z = radius * Math.cos(vertex.theta) * Math.sin(vertex.alpha);
+					x = parseFloat(x.toFixed(4));
+					y = parseFloat(y.toFixed(4));
+					z = parseFloat(z.toFixed(4));
+					return [x, y, z];
+				});
+
 				return vertexes;
 			}
 		};
@@ -677,6 +727,7 @@
 				});
 
 				console.timeEnd('build mesh');
+				console.log('shortestLineDistance:', shortestLineDistance);
 				console.log('mesh:', mesh);
 				return mesh;
 			},
@@ -872,9 +923,25 @@
 		};
 
 		let vertexes = Geo.generateSphereVertexes({
+			// 切面数量，极点也算一个切面
+			section: 2,
+			// 极点数量，可选值 [0,1,2]
+			pole: 2,
+			// 每个切面上的顶点数量
+			// 数组元素数量应与切面数量一致
+			vertexOnSection: [
+				4,
+				4
+			],
+			// 球面半径，取值范围 [0, 1000]
+			radius: 70,
 		});
+
 		console.log('vertexes:\n', JSON.stringify(vertexes));
-		Mesh.init(vertexes);
+		Mesh.init(vertexes, {
+			// 轮廓长度容差，值越高，连线越多
+			outlineDifference: 20
+		});
 
 		const Scene = {
 			computeFps(delay) {
@@ -888,7 +955,7 @@
 				ctx.save();
 				// 原点移动到中心
 				ctx.translate(canvas.width / 2, canvas.height / 2);
-				// Mesh.rotate(Math.PI / 4, Math.PI / 3);
+				Mesh.rotate(Math.PI * 1 / 2, Math.PI * 8 / 10);
 				Mesh.draw(delay);
 				ctx.restore();
 				this.computeFps(delay);
@@ -901,11 +968,29 @@
 				let delay = curTime - this.prevTime;
 				this.prevTime = curTime;
 				this.render(delay);
-				window.requestAnimationFrame(() => this.loop());
+				if (!this.paused) {
+					window.requestAnimationFrame(() => this.loop());
+				}
+			},
+			start() {
+				this.prevTime = 0;
+				this.paused = false;
+				this.loop();
+			},
+			pause() {
+				this.paused = true;
+			},
+			toggle() {
+				if (this.paused) {
+					this.start();
+				} else {
+					this.pause();
+				}
 			}
 		};
 
-		Scene.loop();
+		Scene.start();
+		document.addEventListener('click', () => Scene.toggle());
 	</script>
 </body>
 
