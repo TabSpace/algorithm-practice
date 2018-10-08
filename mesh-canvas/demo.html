@@ -65,9 +65,9 @@
 	</div>
 	<div class="fps" id="fps">0 fps</div>
 	<ol class="intro">
-		<li>现在优化动画效果</li>
-		<li>动画过程中允许产生多个流星</li>
-		<li>随机消费流星</li>
+		<li>接下来我们需要一个更大规模的网格系统</li>
+		<li>找找数学公式来自动在球面生成均匀分布的网格点</li>
+		<li>调整 outlineDifference 参数来实现相邻网格点的连线</li>
 	</ol>
 	<script>
 		const canvas = document.getElementById('canvas');
@@ -183,8 +183,11 @@
 				].join(',');
 			},
 			// 从数组中取出一个随机项
-			getRandom(arr) {
-				return arr[Math.floor(Math.random() * arr.length)];
+			getRandom(arr, random) {
+				if (typeof random === 'undefined') {
+					random = Math.random();
+				}
+				return arr[Math.floor(random * arr.length)];
 			}
 		};
 
@@ -255,6 +258,49 @@
 				color.g = rgb[1];
 				color.b = rgb[2];
 				return color;
+			},
+			// 生成球面网格对象顶点
+			// 正N面体的数量是有限制的
+			// 而近似正多面体的生成是复杂的
+			// 我们这里通过一些简单的概念来降低多面体生成的复杂度
+			generateSphereVertexes(options) {
+				let conf = {
+					// 切面数量，极点也算一个切面
+					section: 2,
+					// 极点数量，可选值 [0,1,2]
+					pole: 0,
+					// 每个切面上的顶点数量
+					// 数组元素数量应与切面数量一致
+					vertexOnSection: [
+						4,
+						4
+					],
+					// 球面半径
+					radius: 50,
+					...options
+				};
+
+				// 用对象承载数据结构
+				let faces = {};
+
+				// 初始化计算数据
+				let poleCount = Util.limit(conf.pole, 0, 2);
+				poleCount = Math.floor(poleCount);
+				let sectionCount = Math.floor(conf.section);
+				sectionCount = Math.max(sectionCount - poleCount, 0);
+
+
+				let vertexes = [
+					[-50, -50, -50],
+					[50, -50, -50],
+					[50, 50, -50],
+					[-50, 50, -50],
+					[-50, -50, 50],
+					[50, -50, 50],
+					[50, 50, 50],
+					[-50, 50, 50]
+				];
+				return vertexes;
 			}
 		};
 
@@ -289,7 +335,6 @@
 				let highlightColor = Geo.projectColor(conf.color, highlightRatio);
 				let highlightRadius = radius * highlightRatio;
 
-				// 坑：每次绘制一个新的图形，都要调用一次 beginPath
 				ctx.save();
 
 				let gradient = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, highlightRadius);
@@ -440,7 +485,8 @@
 					if (vertex.energyLevel < prevEnergyLevel) {
 						// 能量降低一个能级时发射一颗流星
 						// 有一定概率消耗掉一颗流星，不再发射
-						if (Math.random() > consumeProbability) {
+						let random = this.random;
+						if (random > consumeProbability) {
 							this.shootMetor(vertex);
 						}
 					}
@@ -730,7 +776,8 @@
 				this.metorCount++;
 				let metor = {};
 				metor.start = point.id;
-				metor.end = Util.getRandom(point.arround);
+				let random = this.getRandom();
+				metor.end = Util.getRandom(point.arround, random);
 				metor.life = this.conf.metorLife;
 				metor.paintLife = metor.life * ((100 + this.conf.metorLength) / 100);
 				metor.id = + new Date() + '';
@@ -743,22 +790,33 @@
 				let mesh = this.mesh;
 				if (!point) {
 					let arr = this.getAllVertexes();
-					point = Util.getRandom(arr);
+					let random = this.getRandom();
+					point = Util.getRandom(arr, random);
 				}
 				energy = energy || this.conf.metorEnergy;
 				point.energy += energy;
 			},
+			// 用于复用随机数
+			// 随机数生成是比较耗时的操作，复用有利于提升性能
+			getRandom() {
+				if (this.random === null) {
+					this.random = Math.random();
+				}
+				return this.random;
+			},
 			// 绘制网格，用于绘制网格单帧
 			draw(delay) {
+				this.random = null;
+				let random = this.getRandom();
 				let mesh = this.mesh;
 				this.delay = delay || 0;
 				this.reset();
 				let farthestVertex = this.getFarthestVertex();
-				if (Math.random() < this.conf.generateProbability) {
+				if (random < this.conf.generateProbability) {
 					this.giveEnergy();
 				}
 				if (this.initGenerateCount > 0) {
-					if (Math.random() > this.conf.initGenerateProbability) {
+					if (random > this.conf.initGenerateProbability) {
 						this.initGenerateCount--;
 						this.giveEnergy();
 					}
@@ -795,7 +853,7 @@
 					// 流星能量，决定了灯能亮多久
 					metorEnergy: 300,
 					// 最高流星数量
-					metorMaxCount: 20,
+					metorMaxCount: 10,
 					// 节点耗尽流星能量的概率，越高流星死的越快
 					consumeProbability: 1 / 10,
 					// 随机给予节点能量的概率，越高产生的流星越多
@@ -813,18 +871,10 @@
 			}
 		};
 
-		// 参照 css3 标准，z 轴正值朝向近处，物体会放大
-		// 立方体一共 8 个点
-		Mesh.init([
-			[-50, -50, -50],
-			[50, -50, -50],
-			[50, 50, -50],
-			[-50, 50, -50],
-			[-50, -50, 50],
-			[50, -50, 50],
-			[50, 50, 50],
-			[-50, 50, 50]
-		]);
+		let vertexes = Geo.generateSphereVertexes({
+		});
+		console.log('vertexes:\n', JSON.stringify(vertexes));
+		Mesh.init(vertexes);
 
 		const Scene = {
 			computeFps(delay) {
@@ -838,7 +888,7 @@
 				ctx.save();
 				// 原点移动到中心
 				ctx.translate(canvas.width / 2, canvas.height / 2);
-				Mesh.rotate(Math.PI / 4, Math.PI / 3);
+				// Mesh.rotate(Math.PI / 4, Math.PI / 3);
 				Mesh.draw(delay);
 				ctx.restore();
 				this.computeFps(delay);
