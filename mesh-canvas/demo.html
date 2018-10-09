@@ -66,7 +66,7 @@
 	<div class="fps" id="fps">fps 0</div>
 	<ol class="intro">
 		<li>现在，我们让这个网格转起来</li>
-		<li>监听鼠标方向，旋转方向逐渐靠近鼠标所在的位置</li>
+		<li>监听鼠标点击，旋转方向逐渐靠近鼠标所在的位置</li>
 	</ol>
 	<script>
 		const canvas = document.getElementById('canvas');
@@ -812,7 +812,6 @@
 					if (!line.drawed) {
 						this.drawMeshLine(line);
 						line.drawed = true;
-
 						Object.keys(line.metors).forEach(key => {
 							let metor = line.metors[key];
 							this.drawMeshMetor(metor);
@@ -1013,7 +1012,7 @@
 			// 轮廓长度容差，值越高，连线越多
 			outlineDifference: 60,
 			// 最高流星数量
-			metorMaxCount: 15,
+			metorMaxCount: 20,
 			// 初始旋转角度theta
 			startTheta: Math.Pi * 2 / 5,
 			// theta旋转速度（角度/秒）
