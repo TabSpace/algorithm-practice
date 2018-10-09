@@ -65,8 +65,8 @@
 	</div>
 	<div class="fps" id="fps">fps 0</div>
 	<ol class="intro">
-		<li>现在，我们让这个网格转起来</li>
-		<li>监听鼠标点击，旋转方向逐渐靠近鼠标所在的位置</li>
+		<li>用前后2个canvas来渲染内容</li>
+		<li>这样2个canvas之间可以放一个dom元素，形成伪3d嵌套效果</li>
 	</ol>
 	<script>
 		const canvas = document.getElementById('canvas');
@@ -283,7 +283,7 @@
 				let conf = {
 					// 极点数量，可选值 [0,1,2]
 					pole: 0,
-					// 切面数量，极点不算切面
+					// 切面数量
 					section: 2,
 					// 每个切面上的顶点数量
 					// 数组元素数量应与切面数量一致
@@ -1020,7 +1020,15 @@
 			// 初始旋转角度phi
 			startPhi: Math.Pi / 3,
 			// phi旋转速度（角度/秒）
-			phiSpeed: Math.PI / 10
+			phiSpeed: Math.PI / 10,
+			// 初始化节点赋能数量，越高一开始产生的流星越多
+			initGenerateCount: 10,
+			// 随机给予节点能量的概率，越高产生的流星越多
+			generateProbability: 1 / 30,
+			// 单个线段上的流星寿命
+			metorLife: 500,
+			// 流星能量，决定了灯能亮多久
+			metorEnergy: 300
 		});
 
 		const Scene = {
