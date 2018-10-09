@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=0">
+	<meta http-equiv="X-UA-Compatible" content="ie=edge">
+	<title>mesh-canvas</title>
+	<style>
+		body {
+			margin: 0;
+			padding: 0;
+			background-color: #333;
+		}
+
+		.demo {
+			position: relative;
+			margin: 10px auto;
+			width: 480px;
+			height: 480px;
+			border: 1px solid #fff;
+		}
+
+		.demo canvas {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+		}
+
+		.intro {
+			width: 600px;
+			margin: 20px auto;
+			color: #fff;
+			text-align: left;
+		}
+
+		a {
+			color: #fff;
+		}
+
+		a:visited {
+			color: #fff;
+		}
+
+		.fps{
+			position: absolute;
+			left: 10px;
+			top: 10px;
+			padding: 0 10px;
+			background-color: rgba(0, 0, 0, 0.5);
+			border-radius: 5px;
+			color: #fff;
+			line-height: 32px;
+			text-align: center;
+		}
+
+	</style>
+</head>
+
+<body>
+	<div id="scene" class="demo">
+		<canvas id="canvas" width="480" height="480"></canvas>
+	</div>
+	<div class="fps" id="fps">fps 0</div>
+	<ol class="intro">
+		<li>现在，我们让这个网格转起来</li>
+		<li>监听鼠标点击，旋转方向逐渐靠近鼠标所在的位置</li>
+	</ol>
+	<script>
+		const canvas = document.getElementById('canvas');
+		const ctx = canvas.getContext('2d');
+
+		const PERSPECTIVE_DISTANCE = 400;
+
+		// 工具函数
+		const Util = {
+			// 限制一个数值在范围内
+			limit(num, min, max) {
+				return Math.min(Math.max(num, min), max);
+			},
+			// 判断数组中是否存在对象
+			contains(arr, item) {
+				return arr.indexOf(item) >= 0;
+			},
+			// 数组非重复方式插入对象
+			include(arr, item) {
+				if (!Util.contains(arr, item)) {
+					arr.push(item);
+				}
+				return arr;
+			},
+			// 格式化数据为 Float 类型
+			formatFloat(obj, keys) {
+				if (Array.isArray(keys)) {
+					keys.forEach(key => {
+						obj[key] = parseFloat(obj[key]);
+					});
+				}
+			},
+			/**
+			* RGB 颜色值转换为 HSL.
+			* 转换公式参考自 http://en.wikipedia.org/wiki/HSL_color_space.
+			* r, g, 和 b 需要在 [0, 255] 范围内
+			* 返回的 h, s, 和 l 在 [0, 1] 之间
+			*
+			* @param   Number  r       红色色值
+			* @param   Number  g       绿色色值
+			* @param   Number  b       蓝色色值
+			* @return  Array           HSL各值数组
+			*/
+			rgbToHsl(r, g, b) {
+				r /= 255, g /= 255, b /= 255;
+				let max = Math.max(r, g, b);
+				let	min = Math.min(r, g, b);
+				let h, s, l = (max + min) / 2;
+
+				if (max == min) {
+					h = s = 0; // achromatic
+				} else {
+					let d = max - min;
+					s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+					switch (max) {
+						case r:
+							h = (g - b) / d + (g < b ? 6 : 0);
+							break;
+						case g:
+							h = (b - r) / d + 2;
+							break;
+						case b:
+							h = (r - g) / d + 4;
+							break;
+					}
+					h /= 6;
+				}
+
+				return [h, s, l];
+			},
+			/**
+			* HSL颜色值转换为RGB.
+			* 换算公式改编自 http://en.wikipedia.org/wiki/HSL_color_space.
+			* h, s, 和 l 设定在 [0, 1] 之间
+			* 返回的 r, g, 和 b 在 [0, 255]之间
+			*
+			* @param   Number  h       色相
+			* @param   Number  s       饱和度
+			* @param   Number  l       亮度
+			* @return  Array           RGB色值数值
+			*/
+			hslToRgb(h, s, l) {
+				let r, g, b;
+
+				if (s == 0) {
+					r = g = b = l; // achromatic
+				} else {
+					let hue2rgb = function hue2rgb(p, q, t) {
+						if (t < 0) t += 1;
+						if (t > 1) t -= 1;
+						if (t < 1 / 6) return p + (q - p) * 6 * t;
+						if (t < 1 / 2) return q;
+						if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+						return p;
+					}
+
+					let q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+					let p = 2 * l - q;
+					r = hue2rgb(p, q, h + 1 / 3);
+					g = hue2rgb(p, q, h);
+					b = hue2rgb(p, q, h - 1 / 3);
+				}
+				return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+			},
+			// 生成可赋值的rgba属性字符串
+			rgbaToStr(color) {
+				color = color || {};
+				return [
+					'rgba(' + color.r,
+					color.g,
+					color.b,
+					color.a + ')'
+				].join(',');
+			},
+			// 从数组中取出一个随机项
+			getRandom(arr, random) {
+				if (typeof random === 'undefined') {
+					random = Math.random();
+				}
+				return arr[Math.floor(random * arr.length)];
+			}
+		};
+
+		// 几何函数
+		const Geo = {
+			// 获取线段中点
+			getMiddlePoint(p1, p2) {
+				return {
+					x: (p1.x + p2.x) / 2,
+					y: (p1.y + p2.y) / 2,
+					z: (p1.z + p2.z) / 2
+				};
+			},
+			// 获取线段上的某一点
+			getLinePoint(p1, p2, percent) {
+				let pm = {};
+				pm.x = (p2.x - p1.x) * (percent / 100) + p1.x;
+				pm.y = (p2.y - p1.y) * (percent / 100) + p1.y;
+				pm.z = (p2.z - p1.z) * (percent / 100) + p1.z;
+				return pm;
+			},
+			// 我们抄来这个投影公式
+			// 但需要实际理解投影原理，然后再变更它
+			project(vertex) {
+				let pos = {};
+				// Distance between the camera and the plane
+				// 这里需要画图解释为什么使用负值
+				let distance = 0 - PERSPECTIVE_DISTANCE;
+				let ratio = distance / (distance + vertex.z);
+
+				// 改造成我们所需的效果
+				pos.ratio = ratio;
+				pos.x = ratio * vertex.x;
+				pos.y = ratio * vertex.y;
+				pos.z = vertex.z;
+
+				return pos;
+			},
+			// Rotate a vertice
+			// theta 是绕 Z 顺时针旋转
+			// phi 是绕 X 顺时针旋转
+			rotateZX(vertex, center, theta, phi) {
+				// Rotation matrix coefficients
+				let ct = Math.cos(theta);
+				let st = Math.sin(theta);
+				let cp = Math.cos(phi);
+				let sp = Math.sin(phi);
+
+				// Rotation
+				let x = vertex.x - center.x;
+				let y = vertex.y - center.y;
+				let z = vertex.z - center.z;
+
+				vertex.x = ct * x - st * cp * y + st * sp * z + center.x;
+				vertex.y = st * x + ct * cp * y - ct * sp * z + center.y;
+				vertex.z = sp * y + cp * z + center.z;
+			},
+			// alpha 绕 X 逆时针旋转
+			// beta 绕 Y 顺时针旋转
+			rotateXY(vertex, center, alpha, beta) {
+				let sa = Math.sin(alpha);
+				let ca = Math.cos(alpha);
+				let sb = Math.sin(beta);
+				let cb = Math.cos(beta);
+
+				let x = vertex.x - center.x;
+				let y = vertex.y - center.y;
+				let z = vertex.z - center.z;
+
+				vertex.x = x * cb - z * sb;
+				vertex.y = x * sa * sb + y * ca + z * sa * cb;
+				vertex.z = x * ca * sb - y * sa + z * ca * cb;
+			},
+			// 求得投影颜色
+			// 投影是线性变换，颜色变换转成 hsl 表示方式，也很容易实现
+			// hsl 中的 l 指的是亮度，我们要改变的就是它
+			projectColor(color, ratio) {
+				color = { ...color };
+				let hsl = Util.rgbToHsl(color.r, color.g, color.b);
+				// 用比例值开平方舒缓一下色值明暗变化的剧烈程度
+				hsl[2] = Math.sqrt(ratio) * hsl[2];
+				let rgb = Util.hslToRgb.apply(null, hsl);
+				color.r = rgb[0];
+				color.g = rgb[1];
+				color.b = rgb[2];
+				return color;
+			},
+			// 生成球面网格对象顶点
+			// 正N面体的数量是有限制的
+			// 而近似正多面体的生成是复杂的
+			// 我们这里通过一些简单的概念来降低多面体生成的复杂度
+			// 注意这里生成的不是正N面体
+			generateSphereVertexes(options) {
+				let conf = {
+					// 极点数量，可选值 [0,1,2]
+					pole: 0,
+					// 切面数量，极点不算切面
+					section: 2,
+					// 每个切面上的顶点数量
+					// 数组元素数量应与切面数量一致
+					vertexOnSection: [
+						4,
+						4
+					],
+					// 使得每个平面上的点互相错开
+					stagger: true,
+					// 球面半径，取值范围 [0, 1000]
+					radius: 50,
+					// 点阵坐标在一定范围内随机浮动
+					float: 0,
+					...options
+				};
+
+				// 用对象承载数据结构
+				let faces = {};
+
+				// 初始化计算数据
+				let poleCount = Math.floor(Util.limit(conf.pole, 0, 2));
+				let sectionCount = Math.floor(conf.section);
+
+				// 设向量与 xz 平面夹角为 theta
+				// 设向量与 yz 平面夹角为 alpha
+				// 一个切面上的点与 xz 平面的夹角是一致的
+				// 不同切面与 xz 平面的夹角是均分的
+				let unitTheta = Math.PI / (sectionCount + 1);
+
+				// 构建平面列表
+				let sphereVertexes = [];
+				for (let thetaIndex = 0; thetaIndex < sectionCount; thetaIndex++) {
+					let section = {};
+					section.vertexCount = conf.vertexOnSection[thetaIndex] || 0;
+					section.theta = (thetaIndex + 1) * unitTheta - Math.PI / 2;
+					// 每个切面上点的分布是均匀的
+					let unitAlpha = 2 * Math.PI / section.vertexCount;
+					for (let alphaIndex = 0; alphaIndex < section.vertexCount; alphaIndex++) {
+						let vertex = {};
+						// 求得向量坐标
+						vertex.theta = section.theta;
+						vertex.alpha = alphaIndex * unitAlpha;
+						if (conf.stagger && thetaIndex % 2 === 0) {
+							vertex.alpha += unitAlpha / 2;
+						}
+						sphereVertexes.push(vertex);
+					}
+				}
+
+				// 添加极点
+				if (poleCount > 0) {
+					sphereVertexes.unshift({
+						theta: - Math.PI / 2,
+						alpha: 0
+					});
+				}
+				if (poleCount > 1) {
+					sphereVertexes.push({
+						theta: Math.PI / 2,
+						alpha: 0
+					});
+				}
+
+				console.log('sphereVertexes:', sphereVertexes);
+
+				let vertexes = [
+					[50, 50, 50],
+					[50, -50, 50],
+					[-50, -50, 50],
+					[-50, 50, 50],
+					[50, 50, -50],
+					[50, -50, -50],
+					[-50, -50, -50],
+					[-50, 50, -50]
+				];
+
+				// 向量坐标转化为三维坐标
+				let radius = Util.limit(conf.radius, 0, 1000);
+				let float = Math.max(0, conf.float);
+				vertexes = sphereVertexes.map(vertex => {
+					let x = radius * Math.cos(vertex.theta) * Math.cos(vertex.alpha);
+					let y = radius * Math.sin(vertex.theta);
+					let z = radius * Math.cos(vertex.theta) * Math.sin(vertex.alpha);
+					x = parseFloat(x.toFixed(4)) + (Math.random() - 1 / 2) * float;
+					y = parseFloat(y.toFixed(4)) + (Math.random() - 1 / 2) * float;
+					z = parseFloat(z.toFixed(4)) + (Math.random() - 1 / 2) * float;
+					return [x, y, z];
+				});
+
+				return vertexes;
+			}
+		};
+
+		// 绘制
+		const Paint = {
+			// 画点
+			drawPoint(point, options) {
+				if (!point) return;
+				let conf = {
+					size: 0,
+					// 用 highlight 参数调整光晕
+					highlight: 1,
+					color: {
+						r: 0,
+						g: 0,
+						b: 0,
+						a: 1
+					},
+					...options
+				};
+				Util.formatFloat(point, ['x', 'y', 'z']);
+				Util.formatFloat(conf, ['size']);
+
+				let pos = Geo.project(point);
+				// radius 所受的影响与坐标其实一致
+				let radius = (pos.ratio * conf.size) / 2;
+				let color = Geo.projectColor(conf.color, pos.ratio);
+
+				let highlight = conf.highlight;
+				highlight = Util.limit(highlight, 1, 3);
+				let highlightRatio = highlight;
+				let highlightColor = Geo.projectColor(conf.color, highlightRatio);
+				let highlightRadius = radius * highlightRatio;
+
+				ctx.save();
+
+				let gradient = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, highlightRadius);
+				gradient.addColorStop(0, Util.rgbaToStr(highlightColor));
+				gradient.addColorStop(radius / highlightRadius, Util.rgbaToStr(color));
+				color.a = 0.5;
+				gradient.addColorStop(radius / highlightRadius, Util.rgbaToStr(color));
+				color.a = 0;
+				gradient.addColorStop(1, Util.rgbaToStr(color));
+				ctx.fillStyle = gradient;
+				ctx.beginPath();
+				ctx.arc(pos.x, pos.y, highlightRadius, 0, 2 * Math.PI);
+				ctx.fill();
+
+				ctx.restore();
+			},
+			// 画线
+			// 改造方法适配投影坐标
+			drawLine(p1, p2, options) {
+				if (!p1) return;
+				if (!p2) return;
+				let conf = {
+					size: 1,
+					color: {
+						r: 0,
+						g: 0,
+						b: 0,
+						a: 1
+					},
+					...options
+				};
+				Util.formatFloat(conf, ['size']);
+
+				let pos1 = Geo.project(p1);
+				let pos2 = Geo.project(p2);
+				let pm = Geo.getMiddlePoint(p1, p2);
+				let posm = Geo.project(pm);
+
+				let color = Geo.projectColor(conf.color, posm.ratio);
+				let size = posm.ratio * conf.size;
+
+				ctx.save();
+				ctx.beginPath();
+				ctx.strokeStyle = Util.rgbaToStr(color);
+				ctx.fillStyle = Util.rgbaToStr(color);
+				ctx.lineWidth = size;
+				ctx.moveTo(pos1.x, pos1.y);
+				ctx.lineTo(pos2.x, pos2.y);
+				ctx.stroke();
+				ctx.restore();
+			},
+			// 画流星
+			drawMeteor(p1, p2, options) {
+				if (!p1) return;
+				if (!p2) return;
+				let conf = {
+					size: 1,
+					percent: 50,
+					length: 30,
+					color: {
+						r: 0,
+						g: 0,
+						b: 0,
+						a: 1
+					},
+					...options
+				};
+				Util.formatFloat(conf, ['size', 'percent']);
+
+				let percent = Util.limit(conf.percent, 0, 100);
+				// 使用原始值，过量的百分比可绘制流星进入节点的效果
+				let tailPercent = conf.percent - conf.length;
+				tailPercent = Util.limit(tailPercent, 0, 100);
+
+				// 求得流星头部和尾部点的位置
+				let ph = Geo.getLinePoint(p1, p2, percent);
+				let pt = Geo.getLinePoint(p1, p2, tailPercent);
+
+				// 求得投影变换后的位置
+				let posh = Geo.project(ph);
+				let post = Geo.project(pt);
+
+				// 求得中点，用于同步渲染颜色
+				let pm = Geo.getMiddlePoint(p1, p2);
+				let posm = Geo.project(pm);
+
+				let color = Geo.projectColor(conf.color, posm.ratio);
+				let size = posm.ratio * conf.size;
+
+				ctx.save();
+				ctx.beginPath();
+				ctx.lineCap = 'round';
+				let gradient = ctx.createLinearGradient(posh.x, posh.y, post.x, post.y);
+				gradient.addColorStop(0, Util.rgbaToStr(color));
+				color.a = 0;
+				gradient.addColorStop(1, Util.rgbaToStr(color));
+				ctx.strokeStyle = gradient;
+				ctx.fillStyle = gradient;
+				ctx.lineWidth = size;
+				ctx.moveTo(posh.x, posh.y);
+				ctx.lineTo(post.x, post.y);
+				ctx.stroke();
+				ctx.restore();
+			}
+		};
+
+		// 网格对象
+		const Mesh = {
+			// 画网格线
+			drawMeshLine(line) {
+				let mesh = this.mesh;
+				if (!line) return;
+				let v1 = mesh.vertexes[line.p1];
+				let v2 = mesh.vertexes[line.p2];
+				Paint.drawLine({
+					x: v1.px,
+					y: v1.py,
+					z: v1.pz
+				}, {
+					x: v2.px,
+					y: v2.py,
+					z: v2.pz
+				}, {
+					size: this.conf.lineSize,
+					color: { ...this.conf.lineColor }
+				});
+			},
+			// 画网格点
+			drawMeshPoint(vertex) {
+				if (!vertex) return;
+				let delay = this.delay;
+				let highlight = 1;
+				let unitMetorEnergy = this.conf.metorEnergy;
+				let maxHighlight = this.conf.maxHighlight;
+				let pointMaxEnergyLevel = this.conf.pointMaxEnergyLevel;
+				let consumeProbability = this.conf.consumeProbability;
+
+				// 网格节点绘制，同时也是一个消耗节点能量的过程
+				vertex.energy = vertex.energy || 0;
+				vertex.active = vertex.active || 0;
+				vertex.energyLevel = vertex.energyLevel || 0;
+				// 有能量时，把能量传给电灯
+				if (vertex.energy > 0) {
+					let prevEnergyLevel = Math.round(vertex.energy / unitMetorEnergy);
+					vertex.energy -= delay;
+					vertex.energy = Util.limit(vertex.energy, 0, pointMaxEnergyLevel * unitMetorEnergy);
+					vertex.energyLevel = Math.round(vertex.energy / unitMetorEnergy);
+					if (vertex.energyLevel < prevEnergyLevel) {
+						// 能量降低一个能级时发射一颗流星
+						// 有一定概率消耗掉一颗流星，不再发射
+						let random = this.random;
+						if (random > consumeProbability) {
+							this.shootMetor(vertex);
+						}
+					}
+					vertex.active += delay;
+				} else if (vertex.active > 0) {
+					// 没有能量时，电灯能量持续消耗
+					vertex.active -= delay;
+					// 电灯能量有一个峰值，到达峰值无法再增加
+					vertex.active = Util.limit(vertex.active, 0, unitMetorEnergy);
+				}
+
+				if (vertex.active > 0) {
+					// 把电灯能量与峰值的差距，表示为点的高亮参数
+					let val = vertex.active / unitMetorEnergy;
+					highlight += val * (maxHighlight - 1);
+				}
+
+				Paint.drawPoint({
+					x: vertex.px,
+					y: vertex.py,
+					z: vertex.pz
+				}, {
+					highlight,
+					size: this.conf.pointSize,
+					color: { ...this.conf.pointColor }
+				});
+			},
+			// 在网格线上画流星
+			drawMeshMetor(metor) {
+				if (!metor) return;
+				let mesh = this.mesh;
+				let v1 = mesh.vertexes[metor.start];
+				let v2 = mesh.vertexes[metor.end];
+
+				metor.life = metor.life || 0;
+				metor.paintLife = metor.paintLife || 0;
+				let delay = this.delay;
+
+				// metor.life 用来判定何时触发下一个节点的点亮
+				let maxMetorLife = this.conf.metorLife;
+				if (metor.life > 0) {
+					metor.life = Util.limit(metor.life - delay, 0, maxMetorLife);
+					if (metor.life <= 0) {
+						this.giveEnergy(v2);
+					}
+				}
+
+				// paintLife 决定流星的实际存在时间
+				let percent = 0;
+				let maxPaintPercent = 100 + this.conf.metorLength;
+				let maxPaintLife = this.conf.metorLife * (maxPaintPercent / 100);
+				if (metor.paintLife > 0) {
+					metor.paintLife = Util.limit(metor.paintLife - delay, 0, maxPaintLife);
+					percent = (maxPaintLife - metor.paintLife) / maxPaintLife;
+					// 超量 percent 可绘制流星进入节点的效果
+					percent = Util.limit(percent * maxPaintPercent, 0, maxPaintPercent);
+				} else {
+					this.destroyMetor(metor);
+				}
+
+				let conf = {
+					size: this.conf.metorSize,
+					length: this.conf.metorLength,
+					percent,
+					color: { ...this.conf.metorColor }
+				};
+				Paint.drawMeteor({
+					x: v1.px,
+					y: v1.py,
+					z: v1.pz
+				}, {
+					x: v2.px,
+					y: v2.py,
+					z: v2.pz
+				}, conf);
+			},
+			// 旋转网格
+			rotate(theta, phi) {
+				let mesh = this.mesh;
+				let center = this.conf.center;
+				this.getAllVertexes().forEach(vertex => {
+					let pos = {
+						x: vertex.x,
+						y: vertex.y,
+						z: vertex.z
+					};
+					// 注意这里顺序很重要
+					// 想想为什么要先旋转，再投影
+					// 调整参数，了解2个角度参数都是向哪个角度旋转
+					Geo.rotateZX(
+						pos,
+						center,
+						theta,
+						phi
+					);
+					// 存储三维数据到模型，后面复用
+					vertex.px = pos.x;
+					vertex.py = pos.y;
+					vertex.pz = pos.z;
+				});
+			},
+			// 重新梳理数据结构
+			// 建立点和线的联系，便于后续使用
+			// 返回网格对象
+			build(vertexes) {
+				console.time('build mesh');
+				let mesh = {};
+				mesh.vertexes = {};
+				mesh.lines = {};
+				vertexes.forEach((point, index) => {
+					let vertex = {};
+					// 顶点原始位置
+					vertex.x = point[0];
+					vertex.y = point[1];
+					vertex.z = point[2];
+					// 顶点变换后位置
+					vertex.px = point[0];
+					vertex.py = point[1];
+					vertex.pz = point[2];
+
+					vertex.id = '' + index;
+					// 用于流星动画
+					vertex.energy = 0;
+					vertex.arround = [];
+					mesh.vertexes[vertex.id] = vertex;
+				});
+
+				let vertexIds = Object.keys(mesh.vertexes);
+				let allLines = {};
+				let shortestLine = null;
+				// 每个点和其他点都接触一遍，就能遍历所有连线
+				vertexIds.forEach(id => {
+					let p1 = id;
+					vertexIds.forEach(vid => {
+						let p2 = vid;
+						let lineId = this.getLineId(p1, p2);
+						if (!lineId) {
+							return;
+						}
+
+						// 用统一命名方式来排重
+						if (allLines[lineId]) {
+							return;
+						} else {
+							let line = {};
+							line.id = lineId;
+							line.p1 = p1;
+							line.p2 = p2;
+							// 拿到具体顶点坐标来计算顶点距离
+							let v1 = mesh.vertexes[p1];
+							let v2 = mesh.vertexes[p2];
+							// http://www.osgeo.cn/app/sa915
+							// 这公式套的不要太舒服
+							line.distance = Math.sqrt(
+								Math.pow((v1.x - v2.x), 2) +
+								Math.pow((v1.y - v2.y), 2) +
+								Math.pow((v1.z - v2.z), 2)
+							);
+							if (!shortestLine) {
+								shortestLine = line;
+							} else if (shortestLine.distance > line.distance) {
+								shortestLine = line;
+							}
+							allLines[lineId] = line;
+						}
+					});
+				});
+
+				// 我们只要距离在一定范围内的线段
+				let outlineDifference = this.conf.outlineDifference;
+				let shortestLineDistance = shortestLine.distance;
+				Object.keys(allLines).forEach(lineId => {
+					let line = allLines[lineId];
+					if (line.distance <= (shortestLineDistance + outlineDifference)) {
+						mesh.lines[lineId] = line;
+					}
+				});
+
+				// 建立点与其他点之间的关系，便于之后动画处理
+				Object.keys(mesh.lines).forEach(lineId => {
+					let line = mesh.lines[lineId];
+					let v1 = mesh.vertexes[line.p1];
+					let v2 = mesh.vertexes[line.p2];
+					Util.include(v1.arround, line.p2);
+					Util.include(v2.arround, line.p1);
+					// 用于存储线上的流星
+					line.metors = {};
+				});
+
+				console.timeEnd('build mesh');
+				console.log('shortestLineDistance:', shortestLineDistance);
+				console.log('mesh:', mesh);
+				return mesh;
+			},
+			// 根据顶点id获取规范的lineId
+			getLineId(p1, p2) {
+				p1 = parseInt(p1, 10);
+				p2 = parseInt(p2, 10);
+				let lineId = '';
+				// 相同点不建立连线
+				// 线段无方向要求
+				if (p1 < p2) {
+					lineId = p1 + '-' + p2;
+				} else if (p1 > p2) {
+					lineId = p2 + '-' + p1;
+				}
+				return lineId;
+			},
+			// 获取所有顶点
+			getAllVertexes() {
+				let mesh = this.mesh;
+				if (!this.allVertexes) {
+					this.allVertexes = Object.keys(mesh.vertexes).map(
+						id => mesh.vertexes[id]
+					);
+				}
+				return this.allVertexes;
+			},
+			// 获取所有线
+			getAllLines() {
+				let mesh = this.mesh;
+				if (!this.allLines) {
+					this.allLines = Object.keys(mesh.lines).map(
+						id => mesh.lines[id]
+					);
+				}
+				return this.allLines;
+			},
+			// 获取最远的点
+			getFarthestVertex() {
+				let mesh = this.mesh;
+				let farthestVertex = null;
+				this.getAllVertexes().forEach(vertex => {
+					if (!farthestVertex) {
+						farthestVertex = vertex;
+					} else if (vertex.pz < farthestVertex.pz) {
+						farthestVertex = vertex;
+					}
+				});
+				return farthestVertex;
+			},
+			// 递归方式广度优先遍历所有点
+			walk(vertex) {
+				let mesh = this.mesh;
+				if (vertex.drawed) return;
+				let arroundVertexes = vertex.arround.map(id => {
+					let arroundVertex = mesh.vertexes[id];
+					let lineId = this.getLineId(vertex.id, arroundVertex.id);
+					let line = mesh.lines[lineId];
+					if (!line.drawed) {
+						this.drawMeshLine(line);
+						line.drawed = true;
+						Object.keys(line.metors).forEach(key => {
+							let metor = line.metors[key];
+							this.drawMeshMetor(metor);
+						});
+					}
+					return arroundVertex;
+				});
+				// 先画线，再画点
+				this.drawMeshPoint(vertex);
+				vertex.drawed = true;
+				arroundVertexes.forEach(vertex => this.walk(vertex));
+			},
+			// 重置绘制状态
+			reset() {
+				let mesh = this.mesh;
+				this.getAllVertexes().forEach(
+					vertex => { vertex.drawed = false; }
+				);
+				this.getAllLines().forEach(line => {
+					line.drawed = false;
+				});
+			},
+			// 销毁一颗流星
+			destroyMetor(metor) {
+				let mesh = this.mesh;
+				this.metorCount--;
+				this.metorCount = Math.max(0, this.metorCount);
+				let line = mesh.lines[metor.lineId];
+				delete line.metors[metor.id];
+			},
+			// 创建一颗流星
+			shootMetor(point) {
+				let mesh = this.mesh;
+				if (this.metorCount >= this.conf.metorMaxCount) return;
+				this.metorCount++;
+				let metor = {};
+				metor.start = point.id;
+				let random = this.getRandom();
+				metor.end = Util.getRandom(point.arround, random);
+				metor.life = this.conf.metorLife;
+				metor.paintLife = metor.life * ((100 + this.conf.metorLength) / 100);
+				metor.id = + new Date() + '';
+				metor.lineId = this.getLineId(metor.start, metor.end);
+				let line = mesh.lines[metor.lineId];
+				line.metors[metor.id] = metor;
+			},
+			// 给一个节点添加能量
+			giveEnergy(point, energy) {
+				let mesh = this.mesh;
+				if (!point) {
+					let arr = this.getAllVertexes();
+					let random = this.getRandom();
+					point = Util.getRandom(arr, random);
+				}
+				energy = energy || this.conf.metorEnergy;
+				point.energy += energy;
+			},
+			// 用于复用随机数
+			// 随机数生成是比较耗时的操作，复用有利于提升性能
+			getRandom() {
+				if (this.random === null) {
+					this.random = Math.random();
+				}
+				return this.random;
+			},
+			// 自动旋转
+			autoRotate() {
+				let delay = this.delay;
+				let conf = this.conf;
+				let thetaSpeed = conf.thetaSpeed;
+				let phiSpeed = conf.phiSpeed;
+				let deltaTheta = (thetaSpeed / 1000) * delay;
+				let deltaPhi = (phiSpeed / 1000) * delay;
+				let theta = this.theta;
+				let phi = this.phi;
+
+				if (this.thetaResetSpeed) {
+					thetaSpeed = this.thetaResetSpeed;
+					deltaTheta = (thetaSpeed / 1000) * delay;
+					if (theta !== 0) {
+						if (Math.abs(theta) < deltaTheta) {
+						theta = 0;
+						} else {
+							theta = theta > 0 ? theta - deltaTheta : theta + deltaTheta;
+						}
+					}
+				} else {
+					theta += deltaTheta;
+				}
+				this.theta = theta % (2 * Math.PI);
+
+				phi += deltaPhi;
+				this.phi = phi % (2 * Math.PI);
+				this.rotate(this.theta, this.phi);
+			},
+			// 绘制网格，用于绘制网格单帧
+			draw(delay) {
+				this.random = null;
+				let random = this.getRandom();
+				let mesh = this.mesh;
+				this.delay = delay || 0;
+				this.reset();
+				this.autoRotate();
+				let farthestVertex = this.getFarthestVertex();
+				if (random < this.conf.generateProbability) {
+					this.giveEnergy();
+				}
+				if (this.initGenerateCount > 0) {
+					if (random > this.conf.initGenerateProbability) {
+						this.initGenerateCount--;
+						this.giveEnergy();
+					}
+				}
+				this.walk(farthestVertex);
+			},
+			// 网格对象初始化
+			init(vertexes, options) {
+				this.conf = {
+					// 轮廓长度容差，值越高，连线越多
+					outlineDifference: 10,
+					// 旋转中心点
+					center: {x: 0, y: 0, z: 0},
+					// 节点颜色
+					pointColor: {r: 255, g: 145, b: 0 ,a: 1},
+					// 节点尺寸
+					pointSize: 8,
+					// 节点最高能级，值越高，可存储发射的流星越多
+					pointMaxEnergyLevel: 3,
+					// 节点最大高亮参数，选值区间[1,3]
+					maxHighlight: 2.6,
+					// 线条颜色
+					lineColor: {r: 255, g: 145, b: 0 ,a: 1},
+					// 线条尺寸
+					lineSize: 1,
+					// 流星颜色
+					metorColor: {r: 255, g: 211, b: 153 ,a: 1},
+					// 流星尺寸
+					metorSize: 3,
+					// 流星拖尾长度(百分比)
+					metorLength: 30,
+					// 单个线段上的流星寿命
+					metorLife: 1000,
+					// 流星能量，决定了灯能亮多久
+					metorEnergy: 300,
+					// 最高流星数量
+					metorMaxCount: 10,
+					// 节点耗尽流星能量的概率，越高流星死的越快
+					consumeProbability: 1 / 10,
+					// 随机给予节点能量的概率，越高产生的流星越多
+					generateProbability: 1 / 50,
+					// 初始化节点赋能数量，越高一开始产生的流星越多
+					initGenerateCount: 5,
+					// 初始化流星产生概率，越高越迅速产生初始化的流星
+					initGenerateProbability: 1 /2,
+					// 初始旋转角度theta
+					startTheta: 0,
+					// theta旋转速度（角度/秒）
+					thetaSpeed: Math.PI / 4,
+					// 初始旋转角度phi
+					startPhi: 0,
+					// phi旋转速度（角度/秒）
+					phiSpeed: Math.PI / 4,
+					...options
+				};
+				let conf = this.conf;
+				this.metors = {};
+				this.metorCount = 0;
+				this.theta = conf.startTheta || 0;
+				this.phi = conf.startPhi || 0;
+				this.initGenerateCount = this.conf.initGenerateCount;
+				this.mesh = this.build(vertexes);
+			}
+		};
+
+		let vertexes = Geo.generateSphereVertexes({
+			// 极点数量，可选值 [0,1,2]
+			pole: 2,
+			// 切面数量，极点也算一个切面
+			section: 4,
+			// 每个切面上的顶点数量
+			// 数组元素数量应与切面数量一致
+			vertexOnSection: [
+				6,
+				10,
+				10,
+				6
+			],
+			// 使得每个平面上的点互相错开
+			stagger: true,
+			// 球面半径，取值范围 [0, 1000]
+			radius: 200,
+			// 点阵坐标在一定范围内随机浮动
+			float: 5
+		});
+
+		console.log('vertexes:\n', JSON.stringify(vertexes));
+		Mesh.init(vertexes, {
+			// 轮廓长度容差，值越高，连线越多
+			outlineDifference: 60,
+			// 最高流星数量
+			metorMaxCount: 20,
+			// 初始旋转角度theta
+			startTheta: Math.Pi * 2 / 5,
+			// theta旋转速度（角度/秒）
+			thetaSpeed: Math.PI / 10,
+			// 初始旋转角度phi
+			startPhi: Math.Pi / 3,
+			// phi旋转速度（角度/秒）
+			phiSpeed: Math.PI / 10
+		});
+
+		const Scene = {
+			gammaSpeed: Math.PI / 4,
+			computeFps(delay) {
+				let fps = Math.floor(1000 / delay);
+				document.getElementById('fps').innerHTML = ' fps ' + fps;
+			},
+			// 设定球体旋转方向
+			setGama(delay) {
+				let speed = this.gammaSpeed;
+				let delta = (speed / 1000) * delay;
+				let gamma = this.gamma || 0;
+				this.targetGamma = this.targetGamma || gamma;
+				if (this.targetGamma !== gamma) {
+					let includedAngel = Math.abs(this.targetGamma - gamma);
+					if (includedAngel <= delta || Math.abs(2 * Math.PI - includedAngel) <= delta) {
+						gamma = this.targetGamma;
+					} else {
+						if (includedAngel > Math.PI) {
+							delta = 0 - delta;
+						}
+						if (this.targetGamma < gamma) {
+							delta = 0 - delta;
+						}
+						gamma += delta;
+						if (gamma >= 2 * Math.PI) {
+							gamma -= 2 * Math.PI;
+						} else if (gamma < 0) {
+							gamma += 2 * Math.PI;
+						}
+					}
+					this.gamma = gamma;
+				}
+				ctx.rotate(gamma);
+			},
+			// 不断精简 render 体积，变成方法调用集合
+			// 便于之后动画执行时梳理代码整洁度
+			render(delay) {
+				ctx.clearRect(0, 0, canvas.width, canvas.height);
+				ctx.save();
+				// 原点移动到中心
+				ctx.translate(canvas.width / 2, canvas.height / 2);
+				this.setGama(delay);
+				Mesh.draw(delay);
+				ctx.restore();
+				this.computeFps(delay);
+			},
+			getCenter() {
+				let center = {};
+				const elScene = document.getElementById('scene');
+				center.x = elScene.offsetLeft + elScene.offsetWidth / 2;
+				center.y = elScene.offsetTop + elScene.offsetHeight / 2;
+				return center;
+			},
+			// 改变球面运转方向
+			changeGamma(evt) {
+				if (!evt) return;
+				let center = this.getCenter();
+				let deltaX = evt.clientX - center.x;
+				let deltaY = evt.clientY - center.y;
+				let gamma = Math.atan(deltaY / deltaX) || 0;
+				if (deltaX >= 0) {
+					gamma += Math.PI / 2;
+				} else if (deltaX < 0) {
+					gamma += Math.PI  * 3 / 2;
+				}
+				if (Mesh.thetaResetSpeed) {
+					this.targetGamma = gamma;
+				}
+			},
+			toggleMeshTheta() {
+				if (Mesh.thetaResetSpeed) {
+					Mesh.thetaResetSpeed = 0;
+				} else {
+					Mesh.thetaResetSpeed = this.gammaSpeed;
+				}
+			},
+			loop() {
+				let curTime = + new Date();
+				if (!this.prevTime) {
+					this.prevTime = curTime;
+				}
+				let delay = curTime - this.prevTime;
+				this.prevTime = curTime;
+				this.render(delay);
+				if (!this.paused) {
+					window.requestAnimationFrame(() => this.loop());
+				}
+			},
+			start() {
+				this.prevTime = 0;
+				this.paused = false;
+				this.loop();
+			},
+			pause() {
+				this.paused = true;
+			},
+			toggle() {
+				if (this.paused) {
+					this.start();
+				} else {
+					this.pause();
+				}
+			}
+		};
+
+		Scene.start();
+		document.addEventListener('click', evt => {
+			Scene.toggleMeshTheta();
+			Scene.changeGamma(evt);
+		}, false);
+	</script>
+</body>
+
+</html>
