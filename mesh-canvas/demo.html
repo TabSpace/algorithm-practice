@@ -46,7 +46,7 @@
 
 		.fps{
 			position: absolute;
-			right: 10px;
+			left: 10px;
 			top: 10px;
 			padding: 0 10px;
 			background-color: rgba(0, 0, 0, 0.5);
@@ -60,10 +60,10 @@
 </head>
 
 <body>
-	<div class="demo">
+	<div id="scene" class="demo">
 		<canvas id="canvas" width="480" height="480"></canvas>
 	</div>
-	<div class="fps" id="fps">0 fps</div>
+	<div class="fps" id="fps">fps 0</div>
 	<ol class="intro">
 		<li>现在，我们让这个网格转起来</li>
 		<li>监听鼠标方向，旋转方向逐渐靠近鼠标所在的位置</li>
@@ -228,7 +228,7 @@
 			// Rotate a vertice
 			// theta 是绕 Z 顺时针旋转
 			// phi 是绕 X 顺时针旋转
-			rotate(vertex, center, theta, phi) {
+			rotateZX(vertex, center, theta, phi) {
 				// Rotation matrix coefficients
 				let ct = Math.cos(theta);
 				let st = Math.sin(theta);
@@ -243,6 +243,22 @@
 				vertex.x = ct * x - st * cp * y + st * sp * z + center.x;
 				vertex.y = st * x + ct * cp * y - ct * sp * z + center.y;
 				vertex.z = sp * y + cp * z + center.z;
+			},
+			// alpha 绕 X 逆时针旋转
+			// beta 绕 Y 顺时针旋转
+			rotateXY(vertex, center, alpha, beta) {
+				let sa = Math.sin(alpha);
+				let ca = Math.cos(alpha);
+				let sb = Math.sin(beta);
+				let cb = Math.cos(beta);
+
+				let x = vertex.x - center.x;
+				let y = vertex.y - center.y;
+				let z = vertex.z - center.z;
+
+				vertex.x = x * cb - z * sb;
+				vertex.y = x * sa * sb + y * ca + z * sa * cb;
+				vertex.z = x * ca * sb - y * sa + z * ca * cb;
 			},
 			// 求得投影颜色
 			// 投影是线性变换，颜色变换转成 hsl 表示方式，也很容易实现
@@ -633,7 +649,7 @@
 					// 注意这里顺序很重要
 					// 想想为什么要先旋转，再投影
 					// 调整参数，了解2个角度参数都是向哪个角度旋转
-					Geo.rotate(
+					Geo.rotateZX(
 						pos,
 						center,
 						theta,
@@ -868,10 +884,28 @@
 				let conf = this.conf;
 				let thetaSpeed = conf.thetaSpeed;
 				let phiSpeed = conf.phiSpeed;
-				let deltaTheta = thetaSpeed / 1000 * delay;
-				let deltaPhi = phiSpeed / 1000 * delay;
-				this.theta += deltaTheta;
-				this.phi += deltaPhi;
+				let deltaTheta = (thetaSpeed / 1000) * delay;
+				let deltaPhi = (phiSpeed / 1000) * delay;
+				let theta = this.theta;
+				let phi = this.phi;
+
+				if (this.thetaResetSpeed) {
+					thetaSpeed = this.thetaResetSpeed;
+					deltaTheta = (thetaSpeed / 1000) * delay;
+					if (theta !== 0) {
+						if (Math.abs(theta) < deltaTheta) {
+						theta = 0;
+						} else {
+							theta = theta > 0 ? theta - deltaTheta : theta + deltaTheta;
+						}
+					}
+				} else {
+					theta += deltaTheta;
+				}
+				this.theta = theta % (2 * Math.PI);
+
+				phi += deltaPhi;
+				this.phi = phi % (2 * Math.PI);
 				this.rotate(this.theta, this.phi);
 			},
 			// 绘制网格，用于绘制网格单帧
@@ -971,7 +1005,7 @@
 			// 球面半径，取值范围 [0, 1000]
 			radius: 200,
 			// 点阵坐标在一定范围内随机浮动
-			float: 0
+			float: 5
 		});
 
 		console.log('vertexes:\n', JSON.stringify(vertexes));
@@ -981,7 +1015,7 @@
 			// 最高流星数量
 			metorMaxCount: 15,
 			// 初始旋转角度theta
-			startTheta: Math.Pi / 4,
+			startTheta: Math.Pi * 2 / 5,
 			// theta旋转速度（角度/秒）
 			thetaSpeed: Math.PI / 10,
 			// 初始旋转角度phi
@@ -991,9 +1025,38 @@
 		});
 
 		const Scene = {
+			gammaSpeed: Math.PI / 4,
 			computeFps(delay) {
 				let fps = Math.floor(1000 / delay);
-				document.getElementById('fps').innerHTML = fps + ' fps';
+				document.getElementById('fps').innerHTML = ' fps ' + fps;
+			},
+			// 设定球体旋转方向
+			setGama(delay) {
+				let speed = this.gammaSpeed;
+				let delta = (speed / 1000) * delay;
+				let gamma = this.gamma || 0;
+				this.targetGamma = this.targetGamma || gamma;
+				if (this.targetGamma !== gamma) {
+					let includedAngel = Math.abs(this.targetGamma - gamma);
+					if (includedAngel <= delta || Math.abs(2 * Math.PI - includedAngel) <= delta) {
+						gamma = this.targetGamma;
+					} else {
+						if (includedAngel > Math.PI) {
+							delta = 0 - delta;
+						}
+						if (this.targetGamma < gamma) {
+							delta = 0 - delta;
+						}
+						gamma += delta;
+						if (gamma >= 2 * Math.PI) {
+							gamma -= 2 * Math.PI;
+						} else if (gamma < 0) {
+							gamma += 2 * Math.PI;
+						}
+					}
+					this.gamma = gamma;
+				}
+				ctx.rotate(gamma);
 			},
 			// 不断精简 render 体积，变成方法调用集合
 			// 便于之后动画执行时梳理代码整洁度
@@ -1002,10 +1065,40 @@
 				ctx.save();
 				// 原点移动到中心
 				ctx.translate(canvas.width / 2, canvas.height / 2);
-				Mesh.rotate(Math.PI * 10 / 10, Math.PI * 3 / 10);
+				this.setGama(delay);
 				Mesh.draw(delay);
 				ctx.restore();
 				this.computeFps(delay);
+			},
+			getCenter() {
+				let center = {};
+				const elScene = document.getElementById('scene');
+				center.x = elScene.offsetLeft + elScene.offsetWidth / 2;
+				center.y = elScene.offsetTop + elScene.offsetHeight / 2;
+				return center;
+			},
+			// 改变球面运转方向
+			changeGamma(evt) {
+				if (!evt) return;
+				let center = this.getCenter();
+				let deltaX = evt.clientX - center.x;
+				let deltaY = evt.clientY - center.y;
+				let gamma = Math.atan(deltaY / deltaX) || 0;
+				if (deltaX >= 0) {
+					gamma += Math.PI / 2;
+				} else if (deltaX < 0) {
+					gamma += Math.PI  * 3 / 2;
+				}
+				if (Mesh.thetaResetSpeed) {
+					this.targetGamma = gamma;
+				}
+			},
+			toggleMeshTheta() {
+				if (Mesh.thetaResetSpeed) {
+					Mesh.thetaResetSpeed = 0;
+				} else {
+					Mesh.thetaResetSpeed = this.gammaSpeed;
+				}
 			},
 			loop() {
 				let curTime = + new Date();
@@ -1037,7 +1130,10 @@
 		};
 
 		Scene.start();
-		document.addEventListener('click', () => Scene.toggle());
+		document.addEventListener('click', evt => {
+			Scene.toggleMeshTheta();
+			Scene.changeGamma(evt);
+		}, false);
 	</script>
 </body>
 
