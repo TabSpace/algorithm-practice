@@ -61,7 +61,8 @@
 
 <body>
 	<div id="scene" class="demo">
-		<canvas id="canvas" width="480" height="480"></canvas>
+		<canvas id="canvas-bg" width="480" height="480"></canvas>
+		<canvas id="canvas-fr" width="480" height="480"></canvas>
 	</div>
 	<div class="fps" id="fps">fps 0</div>
 	<ol class="intro">
@@ -69,9 +70,14 @@
 		<li>这样2个canvas之间可以放一个dom元素，形成伪3d嵌套效果</li>
 	</ol>
 	<script>
-		const canvas = document.getElementById('canvas');
-		const ctx = canvas.getContext('2d');
+		const canvasFr = document.getElementById('canvas-fr');
+		const canvasBg = document.getElementById('canvas-bg');
+		const ctxFr = canvasFr.getContext('2d');
+		const ctxBg = canvasBg.getContext('2d');
+		const canvasWidth = canvasFr.width;
+		const canvasHeight = canvasFr.height;
 
+		// 观察点距离，影响透视位置
 		const PERSPECTIVE_DISTANCE = 400;
 
 		// 工具函数
@@ -408,6 +414,10 @@
 				let highlightColor = Geo.projectColor(conf.color, highlightRatio);
 				let highlightRadius = radius * highlightRatio;
 
+				let ctx = ctxFr;
+				if (pos.z < 0) {
+					ctx = ctxBg;
+				}
 				ctx.save();
 
 				let gradient = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, highlightRadius);
@@ -449,6 +459,10 @@
 				let color = Geo.projectColor(conf.color, posm.ratio);
 				let size = posm.ratio * conf.size;
 
+				let ctx = ctxFr;
+				if (p1.z < 0 || p2.z < 0) {
+					ctx = ctxBg;
+				}
 				ctx.save();
 				ctx.beginPath();
 				ctx.strokeStyle = Util.rgbaToStr(color);
@@ -497,6 +511,10 @@
 				let color = Geo.projectColor(conf.color, posm.ratio);
 				let size = posm.ratio * conf.size;
 
+				let ctx = ctxFr;
+				if (p1.z < 0 || p2.z < 0) {
+					ctx = ctxBg;
+				}
 				ctx.save();
 				ctx.beginPath();
 				ctx.lineCap = 'round';
@@ -1063,18 +1081,23 @@
 					}
 					this.gamma = gamma;
 				}
-				ctx.rotate(gamma);
+				ctxFr.rotate(gamma);
+				ctxBg.rotate(gamma);
 			},
 			// 不断精简 render 体积，变成方法调用集合
 			// 便于之后动画执行时梳理代码整洁度
 			render(delay) {
-				ctx.clearRect(0, 0, canvas.width, canvas.height);
-				ctx.save();
+				ctxFr.clearRect(0, 0, canvasWidth, canvasHeight);
+				ctxBg.clearRect(0, 0, canvasWidth, canvasHeight);
+				ctxFr.save();
+				ctxBg.save();
 				// 原点移动到中心
-				ctx.translate(canvas.width / 2, canvas.height / 2);
+				ctxFr.translate(canvasWidth / 2, canvasHeight / 2);
+				ctxBg.translate(canvasWidth / 2, canvasHeight / 2);
 				this.setGama(delay);
 				Mesh.draw(delay);
-				ctx.restore();
+				ctxFr.restore();
+				ctxBg.restore();
 				this.computeFps(delay);
 			},
 			getCenter() {
