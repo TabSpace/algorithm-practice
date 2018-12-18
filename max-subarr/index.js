@@ -35,41 +35,73 @@ const expectArr = [
 // 要么是A[1..j]的最大子数组
 // 要么是A[i..j+1](1<=i<=j+1)
 // 算法应当为线性时间
-function findMaxSubArr(arr = []) {
-	let rs = [];
+function findMaxSubArr_tabliang(arr = []) {
 	if (arr.length <= 0) {
-		return rs;
-	}
-	// 记录最大子数组的和, 也是A[1..j]最大子数组的和
-	// 最开始只有1个元素时，A[1..j]最大子数组就是其本身
-	let rsSum = arr[0];
-	// 记录最大子数组开始位置
-	let rsStart = 0;
-	// 记录最大子数组结束位置
-	let rsEnd = 0;
-	// 记录A[i..j]最大子数组的和
-	let rightSum = arr[0];
-	// 记录A[i..j+1]最大子数组开始位置
-	let rightStart = 0;
-	for (let index = 1; index < arr.length; index++) {
-		// 插入一个元素后进行判断
-		// A[i..j]插入这个元素，和如果增大，则最大子数组扩充，否则维持不变
-		if (rsSum + arr[index] > rsSum) {
-			rsSum = rsSum + arr[index];
-			rsEnd = index;
-		}
-		// 从rsStart向右求和，得A[i..j+1]子数组之和，如果大于之前的子数组，则替换A[i..j]最大子数组
-		// 这里没想明白，如果按照上一句注释的做法，就不是线性时间了，再想想
+		return [];
 	}
 
-	return rs;
+	// 最大子数组开始位置
+	let maxStart = 0;
+	// 最大子数组长度
+	let maxLength = 0;
+	// 最大子数组求和
+	let maxSum = 0;
+
+	// 临时数据标记
+	let start = 0;
+	let length = 0;
+	let sum = 0;
+
+	for (let index = 0; index < arr.length; index++) {
+		if (length <= 0 && arr[index] > 0) {
+			start = index;
+			maxStart = start;
+			length = 1;
+			maxLength = length;
+			sum = arr[index];
+			maxSum = sum;
+		} else {
+			length++;
+			sum += arr[index];
+			if (sum > maxSum) {
+				maxSum = sum;
+				maxLength = length;
+				maxStart = start;
+			} else if (sum < 0) {
+				length = 0;
+				sum = 0;
+			}
+		}
+	}
+
+	if (maxLength <= 0) {
+		return [];
+	}
+
+	return arr.slice(maxStart, maxStart + maxLength);
 }
 
-let rs = findMaxSubArr(inputArr);
-console.log('expect:', expectArr);
-console.log('rs:', rs);
-console.assert(rs.length === expectArr.length, `RsArr length should be ${expectArr.length}`);
-rs.forEach((item, index) => {
-	console.assert(item === expectArr[index], `Item should be ${expectArr[index]}`);
-});
+{
+	let rs = findMaxSubArr_tabliang(inputArr);
+	let sum = rs.reduce(
+		(sum, item) => {
+			return sum + item;
+		}, 0
+	);
+	let expectSum = expectArr.reduce(
+		(sum, item) => {
+			return sum + item;
+		}, 0
+	);
+	console.log('input:', inputArr);
+	console.log('expect:', expectArr);
+	console.log('rs:', rs);
+	console.log('sum:', sum);
+	console.assert(rs.length === expectArr.length, `RsArr length should be ${expectArr.length}`);
+	console.assert(sum === expectSum, `RsArr sum should be ${expectSum}`);
+	rs.forEach((item, index) => {
+		console.assert(item === expectArr[index], `Item should be ${expectArr[index]}`);
+	});
+}
+
 
