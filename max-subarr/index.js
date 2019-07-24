@@ -82,7 +82,9 @@ function findMaxSubArr_tabliang(arr = []) {
 }
 
 {
+	console.time('max-subarr')
 	let rs = findMaxSubArr_tabliang(inputArr);
+	console.timeEnd('max-subarr')
 	let sum = rs.reduce(
 		(sum, item) => {
 			return sum + item;
